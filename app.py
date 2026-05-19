@@ -539,6 +539,56 @@ def upload_multi():
 
     return jsonify({'ok': True, 'type': 'excel', 'filenames': filenames})
 
+@app.route('/api/network')
+def get_network():
+    """Build a co-occurrence network graph from tokenized words.
+    Query params:
+        limit  – max number of top nodes to include (default 30)
+        window – sliding window size for co-occurrence (default 5)
+    Returns JSON with 'nodes' and 'edges'.
+    """
+    if not current_transcript['words']:
+        return jsonify({'nodes': [], 'edges': []})
+
+    limit = request.args.get('limit', 30, type=int)
+    window = request.args.get('window', 5, type=int)
+
+    words = current_transcript['words']
+    word_freq = current_transcript['word_freq']
+
+    # Pick the top N words to keep the graph readable
+    top_words = set(list(word_freq.keys())[:limit])
+
+    # Build co-occurrence counts using a sliding window
+    cooc = Counter()
+    for i in range(len(words)):
+        if words[i] not in top_words:
+            continue
+        for j in range(i + 1, min(i + window + 1, len(words))):
+            if words[j] not in top_words and words[j] != words[i]:
+                continue
+            if words[j] == words[i]:
+                continue
+            pair = tuple(sorted([words[i], words[j]]))
+            cooc[pair] += 1
+
+    # Build node list (only nodes that appear in at least one edge)
+    node_set = set()
+    edges = []
+    for (w1, w2), weight in cooc.most_common(limit * 3):
+        if weight < 2:
+            continue
+        node_set.add(w1)
+        node_set.add(w2)
+        edges.append({'source': w1, 'target': w2, 'weight': weight})
+
+    nodes = []
+    for w in node_set:
+        nodes.append({'id': w, 'freq': word_freq.get(w, 1)})
+
+    return jsonify({'nodes': nodes, 'edges': edges})
+
+
 @app.route('/status')
 def transcription_status():
     """Get transcription status"""

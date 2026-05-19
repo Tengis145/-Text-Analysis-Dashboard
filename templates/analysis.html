@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Text Analysis Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -395,6 +396,37 @@
             font-size: 0.75em;
             padding: 2px 8px;
             border-radius: 10px;
+        }
+
+        /* ===== NETWORK GRAPH ===== */
+        #networkSvg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .network-node {
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+
+        .network-node:hover { opacity: 0.85; }
+
+        .network-label {
+            font-size: 9px;
+            font-weight: 700;
+            pointer-events: none;
+            text-anchor: middle;
+            fill: #333;
+        }
+
+        .network-edge {
+            stroke: #bbb;
+            stroke-opacity: 0.45;
+        }
+
+        .network-edge.highlight {
+            stroke: #f39c12;
+            stroke-opacity: 0.9;
             color: white;
             font-weight: 600;
             cursor: pointer;
@@ -568,28 +600,33 @@
         </div>
     </div>
 
-    <!-- 6. BUBBLELINES / phrases (bottom-right) -->
-    <div class="panel">
+    <!-- 6. LINKS / BUBBLELINES (bottom-right) -->
+    <div class="panel" style="display:flex; flex-direction:column;">
         <div class="panel-tabs">
-            <button class="ptab active" onclick="switchPanelTab(this, 'bubblesView')">
-                Bubblelines
+            <button class="ptab active" onclick="switchPanelTab(this, 'linksView')">
+                Links
             </button>
-            <button class="ptab" onclick="switchPanelTab(this, 'phrasesView')">
-                Phrases
+            <button class="ptab" onclick="switchPanelTab(this, 'bubblesView')">
+                Bubblelines
             </button>
             <span class="ptab-help">?</span>
         </div>
         <div class="panel-body">
-            <div class="panel-view active" id="bubblesView">
+            <div class="panel-view active" id="linksView" style="display:block; height:100%; overflow:hidden;">
+                <div id="networkContainer" style="width:100%; height:100%; position:relative;">
+                    <svg id="networkSvg"></svg>
+                </div>
+            </div>
+            <div class="panel-view" id="bubblesView">
                 <div id="bubblelinesContent" style="padding:8px;">
                     <div class="loading-wrap"><div class="spinner"></div><span>Loading…</span></div>
                 </div>
             </div>
-            <div class="panel-view" id="phrasesView">
-                <div id="phrasesContent" style="padding:8px;">
-                    <div class="loading-wrap"><span style="color:#aaa; font-size:0.85em;">Phrase analysis…</span></div>
-                </div>
-            </div>
+        </div>
+        <div class="bottom-bar">
+            <span class="lbl">Nodes:</span>
+            <input type="range" min="10" max="60" value="30" id="networkSlider"
+                   oninput="loadNetwork(+this.value)" style="width:80px; accent-color:#2980b9;">
         </div>
     </div>
 
@@ -973,6 +1010,167 @@ function updateTermsBerry(word) {
                    font-weight:700; cursor:pointer; outline:${sel}; margin:2px;">${w}</span>`;
     }).join('');
 }
+// ============================================================
+// NETWORK GRAPH (Links)
+// ============================================================
+let networkSim = null;
+
+async function loadNetwork(limit = 30) {
+    try {
+        const r = await fetch(`/api/network?limit=${limit}&window=5`);
+        const data = await r.json();
+        renderNetwork(data);
+    } catch(e) {
+        console.error('Network load error:', e);
+    }
+}
+
+function renderNetwork(data) {
+    const container = document.getElementById('networkContainer');
+    const svgEl = document.getElementById('networkSvg');
+    const width = container.clientWidth || 360;
+    const height = container.clientHeight || 280;
+
+    // Clear previous
+    d3.select(svgEl).selectAll('*').remove();
+    if (networkSim) networkSim.stop();
+
+    if (!data.nodes.length) {
+        d3.select(svgEl).append('text')
+            .attr('x', width/2).attr('y', height/2)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#aaa').attr('font-size', '13px')
+            .text('No co-occurrence data');
+        return;
+    }
+
+    const svg = d3.select(svgEl)
+        .attr('width', width)
+        .attr('height', height);
+
+    // Scales
+    const maxFreq = d3.max(data.nodes, d => d.freq) || 1;
+    const maxWeight = d3.max(data.edges, d => d.weight) || 1;
+    const fontScale = d3.scaleSqrt().domain([1, maxFreq]).range([12, 28]);
+    const wScale = d3.scaleLinear().domain([1, maxWeight]).range([3, 20]); // Thicker edges
+
+    // Adjacency lookup for hover highlighting
+    const adjMap = new Map();
+    data.edges.forEach(e => {
+        if (!adjMap.has(e.source)) adjMap.set(e.source, new Set());
+        if (!adjMap.has(e.target)) adjMap.set(e.target, new Set());
+        adjMap.get(e.source).add(e.target);
+        adjMap.get(e.target).add(e.source);
+    });
+
+    // Calculate node dimensions before simulation
+    data.nodes.forEach(d => {
+        d.fs = fontScale(d.freq);
+        d.w = d.id.length * d.fs * 0.6 + 20; // estimate width
+        d.h = d.fs + 16;                     // estimate height
+    });
+
+    // Force simulation
+    networkSim = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.edges).id(d => d.id).distance(80).strength(0.35))
+        .force('charge', d3.forceManyBody().strength(-200)) // Push apart more due to larger nodes
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => Math.max(d.w, d.h) / 2 + 5));
+
+    // Edges
+    const link = svg.append('g')
+        .selectAll('line')
+        .data(data.edges)
+        .join('line')
+        .attr('class', 'network-edge')
+        .attr('stroke-width', d => wScale(d.weight))
+        .attr('stroke', '#bbb')
+        .attr('stroke-opacity', 0.45);
+
+    // Node groups
+    const node = svg.append('g')
+        .selectAll('g')
+        .data(data.nodes)
+        .join('g')
+        .attr('class', 'network-node')
+        .call(d3.drag()
+            .on('start', dragStarted)
+            .on('drag', dragged)
+            .on('end', dragEnded));
+
+    // Rectangles
+    node.append('rect')
+        .attr('rx', 6)
+        .attr('ry', 6)
+        .attr('width', d => d.w)
+        .attr('height', d => d.h)
+        .attr('x', d => -d.w / 2)
+        .attr('y', d => -d.h / 2)
+        .attr('fill', (d, i) => {
+            // Use pastel versions of colors
+            const c = d3.hsl(wordColor(i));
+            c.s = 0.5; c.l = 0.8; 
+            return c;
+        })
+        .attr('stroke', (d, i) => {
+            const c = d3.hsl(wordColor(i));
+            c.s = 0.6; c.l = 0.6;
+            return c;
+        })
+        .attr('stroke-width', 2);
+
+    // Labels
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'central')
+        .attr('fill', '#000')
+        .style('font-size', d => `${d.fs}px`)
+        .text(d => d.id);
+
+    // Hover: highlight neighbors
+    node.on('mouseover', function(event, d) {
+        const neighbors = adjMap.get(d.id) || new Set();
+        node.style('opacity', n => (n.id === d.id || neighbors.has(n.id)) ? 1 : 0.15);
+        link.attr('class', l => {
+            const src = typeof l.source === 'object' ? l.source.id : l.source;
+            const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+            return (src === d.id || tgt === d.id) ? 'network-edge highlight' : 'network-edge';
+        }).style('stroke-opacity', l => {
+            const src = typeof l.source === 'object' ? l.source.id : l.source;
+            const tgt = typeof l.target === 'object' ? l.target.id : l.target;
+            return (src === d.id || tgt === d.id) ? 0.9 : 0.08;
+        });
+    }).on('mouseout', function() {
+        node.style('opacity', 1);
+        link.attr('class', 'network-edge').style('stroke-opacity', 0.45);
+    }).on('click', function(event, d) {
+        selectWord(d.id);
+    });
+
+    // Tick
+    networkSim.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+        node.attr('transform', d => {
+            d.x = Math.max(20, Math.min(width - 20, d.x));
+            d.y = Math.max(20, Math.min(height - 20, d.y));
+            return `translate(${d.x},${d.y})`;
+        });
+    });
+
+    function dragStarted(event, d) {
+        if (!event.active) networkSim.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+    }
+    function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+    function dragEnded(event, d) {
+        if (!event.active) networkSim.alphaTarget(0);
+        d.fx = null; d.fy = null;
+    }
+}
 
 // ============================================================
 // TOAST / UTIL
@@ -1009,6 +1207,7 @@ async function init() {
         loadTrends(Object.keys(allWords).slice(0, 5));
         renderBubblelines();
         updateTermsBerry(null);
+        loadNetwork(30);
 
         // Auto-select top word for contexts
         const topWord = Object.keys(allWords)[0];
