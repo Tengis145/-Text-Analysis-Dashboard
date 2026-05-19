@@ -31,12 +31,12 @@ for sheet_name, sheet_checks in checks.items():
     for row, col, desc, check_fn in sheet_checks:
         cell_val = ws.cell(row=row, column=col).value
         if cell_val is None:
-            print(f"  ❌ [{sheet_name}] {desc}: cell is empty!")
+            print(f"  FAIL [{sheet_name}] {desc}: cell is empty!")
             all_ok = False
         elif check_fn(str(cell_val)):
-            print(f"  ✅ [{sheet_name}] {desc}")
+            print(f"  OK   [{sheet_name}] {desc}")
         else:
-            print(f"  ❌ [{sheet_name}] {desc}: {repr(str(cell_val)[:80])}")
+            print(f"  FAIL [{sheet_name}] {desc}: {repr(str(cell_val)[:80])}")
             all_ok = False
 
 # Verify File 2
@@ -53,16 +53,16 @@ f2_checks = [
 for row, col, desc, check_fn in f2_checks:
     cell_val = ws2.cell(row=row, column=col).value
     if cell_val is None:
-        print(f"  ❌ [математик] {desc}: cell is empty!")
+        print(f"  FAIL [математик] {desc}: cell is empty!")
         all_ok = False
     elif check_fn(cell_val):
-        print(f"  ✅ [математик] {desc}")
+        print(f"  OK   [математик] {desc}")
     else:
-        print(f"  ❌ [математик] {desc}: {repr(str(cell_val)[:80])}")
+        print(f"  FAIL [математик] {desc}: {repr(str(cell_val)[:80])}")
         all_ok = False
 
 print()
 if all_ok:
-    print("🎉 Бүх засварууд амжилттай хийгдлээ!")
+    print("Бүх засварууд амжилттай хийгдлээ!")
 else:
-    print("⚠️ Зарим засварууд алдаатай байна.")
+    print("АНХААРУУЛГА: Зарим засварууд алдаатай байна.")

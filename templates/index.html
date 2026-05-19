@@ -3,1541 +3,510 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Data Analysis</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.2.2/wordcloud2.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Text Analysis Tool — See Through Your Text</title>
     <style>
-        :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-glass: rgba(30, 41, 59, 0.7);
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --accent-primary: #3b82f6;
-            --accent-hover: #2563eb;
-            --border-color: rgba(255, 255, 255, 0.1);
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --cat-1: #60a5fa;
-            --cat-2: #fbbf24;
-            --cat-3: #34d399;
-            --radius-lg: 16px;
-            --radius-md: 12px;
-            --radius-sm: 8px;
-            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            background-color: var(--bg-primary);
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%);
-            color: var(--text-primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f0f0;
             min-height: 100vh;
-            overflow-x: hidden;
             display: flex;
             flex-direction: column;
-            background-attachment: fixed;
-        }
-
-        /* Glassmorphism Panels */
-        .glass-panel {
-            background: var(--bg-glass);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-glass);
-        }
-
-        /* Header */
-        .header {
-            padding: 20px 30px;
-            display: flex;
-            justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .header h1 {
-            font-size: 1.8rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #60a5fa, #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.5px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        /* Toolbar */
-        .toolbar {
-            padding: 20px 30px;
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .toolbar-group {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .toolbar-label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        /* Controls */
-        input[type="text"],
-        input[type="number"],
-        select {
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            padding: 10px 14px;
-            border-radius: var(--radius-sm);
-            font-size: 0.9rem;
-            transition: var(--transition);
-            outline: none;
-        }
-
-        input:focus, select:focus {
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
-
-        button {
-            background: var(--accent-primary);
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: var(--radius-sm);
-            font-size: 0.9rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
-        }
-
-        button:hover {
-            background: var(--accent-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 8px -1px rgba(59, 130, 246, 0.4);
-        }
-
-        button.secondary {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: none;
-        }
-
-        button.secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        /* Main Layout */
-        .dashboard-grid {
-            padding: 0 30px 30px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-            gap: 24px;
-            flex: 1;
-        }
-
-        .full-width {
-            grid-column: 1 / -1;
-        }
-
-        /* Panel Structure */
-        .panel {
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            transition: var(--transition);
-        }
-
-        .panel:hover {
-            border-color: rgba(255, 255, 255, 0.2);
-            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
-        }
-
-        .panel-header {
-            padding: 18px 24px;
-            border-bottom: 1px solid var(--border-color);
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: var(--text-primary);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.02);
-        }
-
-        .panel-content {
-            padding: 24px;
-            flex: 1;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Word Cloud */
-        #wordCloudContainer {
-            width: 100%;
-            height: 250px;
-            position: relative;
-        }
-
-        #wordCloudCanvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-
-        .word-item {
-            background: rgba(59, 130, 246, 0.1);
-            color: #e2e8f0;
-            padding: 8px 16px;
-            border-radius: 30px;
-            font-weight: 500;
-            white-space: nowrap;
-            cursor: pointer;
-            transition: var(--transition);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .word-item:hover {
-            transform: scale(1.15) translateY(-2px);
-            background: var(--accent-primary);
-            color: white;
-            border-color: var(--accent-hover);
-            box-shadow: 0 10px 20px -5px rgba(59, 130, 246, 0.5);
-            z-index: 10;
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .stat-card {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 18px;
-            border-radius: var(--radius-md);
-            border-left: 4px solid var(--accent-primary);
-            transition: var(--transition);
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .stat-card::after {
-            content: '';
-            position: absolute;
-            top: 0; right: 0; bottom: 0; left: 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%);
-            pointer-events: none;
-        }
-
-        .stat-card:hover {
-            background: rgba(0, 0, 0, 0.3);
-            transform: translateX(4px);
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-        }
-
-        .stat-value {
-            font-size: 1.7rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        /* Categories Grid */
-        .category-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .cat-item {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 16px 12px;
-            border-radius: var(--radius-md);
-            text-align: center;
-            border-top: 3px solid;
-            transition: var(--transition);
-        }
-
-        .cat-item:hover {
-            transform: translateY(-4px);
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .category-1 { border-top-color: var(--cat-1); }
-        .category-2 { border-top-color: var(--cat-2); }
-        .category-3 { border-top-color: var(--cat-3); }
-
-        .cat-label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-
-        .cat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        /* Charts */
-        .chart-container {
-            position: relative;
-            height: 250px;
-            width: 100%;
-        }
-
-        .large-chart {
-            height: 350px;
-        }
-
-        /* Lists */
-        .document-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding-right: 5px;
-        }
-
-        .document-list li {
-            padding: 14px 18px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: var(--radius-sm);
-            border: 1px solid transparent;
-            cursor: pointer;
-            transition: var(--transition);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .document-list li:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.1);
-            transform: translateX(4px);
-        }
-
-        .document-list li.active {
-            background: rgba(59, 130, 246, 0.15);
-            border-color: rgba(59, 130, 246, 0.3);
-            border-left: 3px solid var(--accent-primary);
-        }
-
-        .doc-name {
-            font-weight: 500;
-            color: #e2e8f0;
-        }
-
-        .doc-meta {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            background: rgba(0, 0, 0, 0.4);
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-weight: 500;
-        }
-
-        /* Tables */
-        .table-container {
-            overflow-x: auto;
-            border-radius: var(--radius-md);
-            border: 1px solid var(--border-color);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.95rem;
-        }
-
-        th {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 16px;
-            text-align: left;
-            font-weight: 600;
-            color: var(--text-secondary);
-            border-bottom: 1px solid var(--border-color);
-            white-space: nowrap;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 0.5px;
-        }
-
-        td {
-            padding: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            color: var(--text-primary);
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        tr:hover td {
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        /* Progress Bar in Table */
-        .progress-bar-bg {
-            background: rgba(255, 255, 255, 0.1);
-            height: 10px;
-            border-radius: 5px;
-            overflow: hidden;
-            width: 100%;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--accent-primary), #8b5cf6);
-            border-radius: 5px;
-            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Loaders */
-        .loading {
-            display: flex;
             justify-content: center;
-            align-items: center;
-            height: 100%;
-            min-height: 150px;
-            color: var(--text-secondary);
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(59, 130, 246, 0.2);
-            border-top-color: var(--accent-primary);
-            border-radius: 50%;
-            animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Modals */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(8px);
-            opacity: 0;
-            transition: opacity 0.3s;
             padding: 20px;
         }
 
-        .modal.show {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 1;
+        .header {
+            text-align: center;
+            margin-bottom: 36px;
         }
 
-        .modal-content {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-lg);
-            width: 100%;
-            max-width: 800px;
-            max-height: 90vh;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            transform: scale(0.95);
-            transition: transform 0.3s;
-            background-image: linear-gradient(to bottom right, rgba(255,255,255,0.05), transparent);
+        .logo {
+            font-size: 4em;
+            font-weight: 900;
+            color: #1a1a1a;
+            letter-spacing: 4px;
+            font-family: Georgia, serif;
         }
 
-        .modal.show .modal-content {
-            transform: scale(1);
-        }
+        .logo span { color: #c0392b; }
 
-        .modal-header {
-            padding: 24px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-header h2 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .close {
-            background: rgba(255,255,255,0.05);
-            border: none;
-            color: var(--text-secondary);
-            font-size: 1.5rem;
-            cursor: pointer;
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .owl {
+            display: inline-block;
+            width: 70px;
+            height: 70px;
+            background: radial-gradient(circle, #c0392b 55%, #1a1a1a 56%);
             border-radius: 50%;
-            transition: var(--transition);
+            border: 4px solid #1a1a1a;
+            vertical-align: middle;
+            margin: 0 6px;
+            position: relative;
+            font-size: 2.2em;
+            line-height: 62px;
+            text-align: center;
         }
 
-        .close:hover {
-            background: rgba(239, 68, 68, 0.2);
-            color: #fca5a5;
+        .tagline {
+            font-size: 1.15em;
+            color: #c0392b;
+            font-style: italic;
+            margin-top: 6px;
+            font-family: Georgia, serif;
         }
 
-        .modal-body {
-            padding: 24px;
-            overflow-y: auto;
+        .container {
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+            max-width: 720px;
+            width: 100%;
         }
 
-        /* Toasts */
-        .toast-container {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            z-index: 2000;
+        .container-header {
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+            padding: 10px 14px;
+            font-size: 0.88em;
+            font-weight: 600;
+            color: #333;
             display: flex;
-            flex-direction: column;
-            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .container-header-icons {
+            display: flex;
+            gap: 6px;
+            color: #888;
+            font-size: 1em;
+        }
+
+        .container-body {
+            padding: 24px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .tab-btn {
+            padding: 9px 18px;
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            font-size: 0.92em;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .tab-btn:hover { color: #2471a3; }
+
+        .tab-btn.active {
+            color: #2471a3;
+            border-bottom-color: #2471a3;
+            font-weight: 700;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        textarea {
+            width: 100%;
+            height: 180px;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.88em;
+            resize: vertical;
+            color: #555;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #2471a3;
+        }
+
+        textarea::placeholder { color: #aaa; }
+
+        /* Excel two-slot layout */
+        .excel-slots {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 6px;
+        }
+
+        .excel-slot {
+            border: 2px dashed #aac4e0;
+            border-radius: 4px;
+            padding: 20px 12px;
+            text-align: center;
+            cursor: pointer;
+            background: #f7fbff;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .excel-slot:hover {
+            border-color: #2471a3;
+            background: #eaf4ff;
+        }
+
+        .excel-slot.has-file {
+            border-color: #27ae60;
+            background: #f0fff4;
+        }
+
+        .slot-icon { font-size: 2em; margin-bottom: 6px; }
+
+        .slot-label {
+            font-size: 0.82em;
+            color: #2471a3;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .slot-sub {
+            font-size: 0.76em;
+            color: #999;
+        }
+
+        .slot-filename {
+            font-size: 0.78em;
+            color: #27ae60;
+            font-weight: 600;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+
+        .file-input { display: none; }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 22px;
+            align-items: center;
+        }
+
+        .btn-reveal {
+            flex: 1;
+            padding: 13px;
+            background: #2471a3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-reveal:hover { background: #1a5276; }
+        .btn-reveal:disabled { background: #aaa; cursor: not-allowed; }
+
+        .btn-clear {
+            padding: 11px 18px;
+            background: #f0f0f0;
+            color: #555;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.92em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-clear:hover { background: #e0e0e0; }
+
+        .help-note {
+            font-size: 0.8em;
+            color: #999;
+            margin-top: 12px;
+            line-height: 1.6;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 16px;
+        }
+
+        .loader.show { display: block; }
+
+        .spinner {
+            border: 3px solid #eee;
+            border-top: 3px solid #2471a3;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            animation: spin 0.9s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .toast {
-            background: rgba(30, 41, 59, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            padding: 16px 20px;
-            border-radius: var(--radius-md);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            min-width: 300px;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: white;
+            padding: 12px 18px;
+            border-radius: 4px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 1000;
+            font-size: 0.9em;
         }
 
-        .toast.success { border-left: 4px solid var(--success); }
-        .toast.error { border-left: 4px solid var(--danger); }
-        .toast.info { border-left: 4px solid var(--accent-primary); }
+        .toast.show { display: block; }
+        .toast.error { border-left: 4px solid #c0392b; color: #c0392b; }
+        .toast.success { border-left: 4px solid #27ae60; color: #27ae60; }
 
-        .toast-icon {
-            font-size: 1.4rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .toast.success .toast-icon { color: var(--success); }
-        .toast.error .toast-icon { color: var(--danger); }
-        .toast.info .toast-icon { color: var(--accent-primary); }
-
-        @keyframes slideUp {
-            from { transform: translateY(100px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        footer {
+        .footer {
+            margin-top: 28px;
             text-align: center;
-            padding: 24px;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            border-top: 1px solid var(--border-color);
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-        }
-        
-        #fileInput { display: none; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
-
-        /* Form grouping in modals */
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-        .form-group select {
-            width: 100%;
-            padding: 12px;
-            background: rgba(0,0,0,0.2);
+            color: #aaa;
+            font-size: 0.78em;
+            line-height: 1.7;
         }
 
-        /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .footer a { color: #2471a3; text-decoration: none; }
+
+        /* Did you know tooltip */
+        .tip-box {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px 14px;
+            font-size: 0.82em;
+            color: #555;
+            margin-top: 14px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
         }
-        .animate-fade-in {
-            animation: fadeIn 0.5s ease forwards;
-        }
+
+        .tip-icon { color: #2471a3; font-size: 1.1em; flex-shrink: 0; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#gradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#60a5fa" />
-                        <stop offset="100%" stop-color="#a78bfa" />
-                    </linearGradient>
-                </defs>
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <line x1="12" y1="22.08" x2="12" y2="12"></line>
-            </svg>
-            Data Analytics Hub
-        </h1>
+        <div class="logo">
+            T<span class="owl">E</span>XT ANALYZER
+        </div>
+        <div class="tagline">see through your text</div>
     </div>
 
-    <div class="toolbar glass-panel" style="margin: 20px 30px; border-radius: var(--radius-md);">
-        <div class="toolbar-group">
-            <span class="toolbar-label">Keywords</span>
-            <input type="text" id="searchInput" placeholder="Search e.g. 'баг'..." style="width: 160px;">
-            <span class="toolbar-label" style="margin-left: 10px;">Min Freq</span>
-            <input type="number" id="minFreq" value="1" min="1" style="width: 70px;">
-            <button onclick="updateWordCloud()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                Analyze
-            </button>
-        </div>
-
-        <div class="toolbar-group">
-            <button onclick="showTimeAnalysis()" class="secondary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                Time Metrics
-            </button>
-            <button onclick="showSpeakerAnalysis()" class="secondary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                Speaker (S/T)
-            </button>
-            <button onclick="showComparison()" class="secondary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"></path><path d="M21 3l-7 7"></path><path d="M8 21H3v-5"></path><path d="M3 21l7-7"></path></svg>
-                Compare
-            </button>
-            <button onclick="showDetailedStats()" class="secondary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg>
-                Full Stats
-            </button>
-            <button onclick="reloadData()" class="secondary" style="margin-left: 10px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                Sync Data
-            </button>
-            <button onclick="uploadFile()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                Upload Excel
-            </button>
-            <div style="width: 1px; height: 24px; background: var(--border-color); margin: 0 5px;"></div>
-            <button onclick="exportCSV()" class="secondary" title="Export CSV">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            </button>
-            <button onclick="exportAll()" class="secondary" title="Export All">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            </button>
-        </div>
-    </div>
-
-    <div class="dashboard-grid">
-        <!-- Left Panel: Word Cloud -->
-        <div class="panel glass-panel animate-fade-in" style="animation-delay: 0.1s;">
-            <div class="panel-header">
-                Semantic Word Cloud
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+    <div class="container">
+        <div class="container-header">
+            <span>Add Texts</span>
+            <div class="container-header-icons">
+                <span title="Copy link">link</span>
+                <span title="Toggle">[ ]</span>
+                <span title="Help">?</span>
             </div>
-            <div class="panel-content" id="wordCloudContainer" style="padding: 10px;">
-                <canvas id="wordCloudCanvas"></canvas>
-                <div id="wordCloudLoading" class="loading" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.8); z-index: 10; border-radius: 0 0 var(--radius-lg) var(--radius-lg);">
-                    <div class="spinner"></div>
+        </div>
+        <div class="container-body">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('text', this)">Text Input</button>
+                <button class="tab-btn" onclick="switchTab('excel', this)">Excel Files</button>
+                <button class="tab-btn" onclick="switchTab('files', this)">Subtitles / TXT</button>
+            </div>
+
+            <!-- Text Input -->
+            <div id="text" class="tab-content active">
+                <textarea id="textInput" placeholder="Type in one or more URLs on separate lines or paste in a full text."></textarea>
+                <div class="tip-box">
+                    <span class="tip-icon">(i)</span>
+                    <span><strong>Tip:</strong> Paste text, enter URLs one per line, or switch tabs to upload files.</span>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-reveal" onclick="analyzeText()">Reveal</button>
+                    <button class="btn-clear" onclick="document.getElementById('textInput').value=''">Clear</button>
                 </div>
             </div>
-        </div>
 
-        <!-- Center Panel: Summary & Categories -->
-        <div class="panel glass-panel animate-fade-in" style="animation-delay: 0.2s;">
-            <div class="panel-header">
-                Dataset Overview
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-            </div>
-            <div class="panel-content">
-                <div class="stats-grid" id="summaryStats">
-                    <div class="stat-card">
-                        <div class="stat-label">Total Sheets</div>
-                        <div class="stat-value" id="totalSheets">-</div>
+            <!-- Excel Files (2 slots) -->
+            <div id="excel" class="tab-content">
+                <div class="excel-slots">
+                    <!-- Slot 1 -->
+                    <div class="excel-slot" id="slot1" onclick="document.getElementById('excelInput1').click()">
+                        <div class="slot-icon">[XLS]</div>
+                        <div class="slot-label">Document 1</div>
+                        <div class="slot-sub">Click to upload Excel file<br>(.xlsx / .xls)</div>
+                        <div class="slot-filename" id="slot1Name"></div>
+                        <input type="file" id="excelInput1" class="file-input" accept=".xlsx,.xls" onchange="handleSlot(1, event)">
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Total Rows</div>
-                        <div class="stat-value" id="totalRows">-</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Total Cells</div>
-                        <div class="stat-value" id="totalCells">-</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Max Columns</div>
-                        <div class="stat-value" id="maxColumns">-</div>
+                    <!-- Slot 2 -->
+                    <div class="excel-slot" id="slot2" onclick="document.getElementById('excelInput2').click()">
+                        <div class="slot-icon">[XLS]</div>
+                        <div class="slot-label">Document 2</div>
+                        <div class="slot-sub">Click to upload Excel file<br>(.xlsx / .xls)</div>
+                        <div class="slot-filename" id="slot2Name"></div>
+                        <input type="file" id="excelInput2" class="file-input" accept=".xlsx,.xls" onchange="handleSlot(2, event)">
                     </div>
                 </div>
-
-                <div class="panel-header" style="padding: 0 0 15px 0; border: none; font-size: 1rem; color: var(--text-secondary);">
-                    Sentiment / Category Distribution
+                <div class="help-note">
+                    Upload one or two Excel files. Their text content will be combined and analyzed together.
+                    Supports .xlsx and .xls formats with multiple sheets.
                 </div>
-                <div class="category-stats" id="categoryStats">
-                    <div class="cat-item category-1">
-                        <div class="cat-label">Positive (1)</div>
-                        <div class="cat-value" id="cat1">0</div>
-                    </div>
-                    <div class="cat-item category-2">
-                        <div class="cat-label">Negative (2)</div>
-                        <div class="cat-value" id="cat2">0</div>
-                    </div>
-                    <div class="cat-item category-3">
-                        <div class="cat-label">Neutral (3)</div>
-                        <div class="cat-value" id="cat3">0</div>
-                    </div>
+                <div class="btn-row">
+                    <button class="btn-reveal" onclick="analyzeExcel()" id="analyzeExcelBtn">Reveal</button>
+                    <button class="btn-clear" onclick="clearExcel()">Clear</button>
                 </div>
+            </div>
 
-                <div id="categoryChart" class="chart-container"></div>
-            </div>
-        </div>
-
-        <!-- Right Panel: Sheets -->
-        <div class="panel glass-panel animate-fade-in" style="animation-delay: 0.3s;">
-            <div class="panel-header">
-                Available Documents
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            </div>
-            <div class="panel-content">
-                <ul class="document-list" id="documentList">
-                    <li class="loading"><div class="spinner"></div></li>
-                </ul>
-            </div>
-        </div>
-
-        <!-- Full width: Trends Chart -->
-        <div class="panel glass-panel full-width animate-fade-in" style="animation-delay: 0.4s;">
-            <div class="panel-header">
-                Category Trends Across Documents
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-            </div>
-            <div class="panel-content">
-                <div id="trendsChart" class="chart-container large-chart"></div>
-            </div>
-        </div>
-
-        <!-- Full width: Top Words Table -->
-        <div class="panel glass-panel full-width animate-fade-in" style="animation-delay: 0.5s;">
-            <div class="panel-header">
-                Top 20 Frequent Keywords
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-            </div>
-            <div class="panel-content" style="padding: 0;">
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="width: 5%; text-align: center;">Rank</th>
-                                <th style="width: 25%;">Keyword</th>
-                                <th style="width: 15%;">Frequency</th>
-                                <th style="width: 55%;">Relative Volume</th>
-                            </tr>
-                        </thead>
-                        <tbody id="wordsTable">
-                            <tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>
-                        </tbody>
-                    </table>
+            <!-- Subtitles / TXT -->
+            <div id="files" class="tab-content">
+                <div class="excel-slot" style="width:100%; display:block; text-align:center; margin-bottom:14px;"
+                     onclick="document.getElementById('subtitleInput').click()">
+                    <div class="slot-icon">[TXT]</div>
+                    <div class="slot-label">Upload SRT / VTT / TXT file</div>
+                    <div class="slot-sub">Transcript or subtitle file</div>
+                    <div class="slot-filename" id="subtitleName"></div>
+                    <input type="file" id="subtitleInput" class="file-input" accept=".srt,.vtt,.txt" onchange="handleSubtitle(event)">
                 </div>
+                <div class="help-note">
+                    Upload a subtitle or transcript file to analyze word frequency, trends, and contexts.
+                </div>
+                <div class="btn-row">
+                    <button class="btn-reveal" onclick="analyzeFiles()">Reveal</button>
+                    <button class="btn-clear" onclick="clearFiles()">Clear</button>
+                </div>
+            </div>
+
+            <div class="loader" id="loader">
+                <div class="spinner"></div>
+                <div style="color:#888; font-size:0.9em;">Processing your content…</div>
             </div>
         </div>
     </div>
 
-    <!-- Modals -->
-    <div id="comparisonModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Document Comparison</h2>
-                <button class="close" onclick="closeModal('comparisonModal')">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div class="form-group">
-                        <label>Primary Document (Sheet 1)</label>
-                        <select id="compareSheet1"></select>
-                    </div>
-                    <div class="form-group">
-                        <label>Secondary Document (Sheet 2)</label>
-                        <select id="compareSheet2"></select>
-                    </div>
-                </div>
-                <div id="comparisonResult" style="margin-top: 10px;"></div>
-            </div>
-        </div>
+    <div class="footer">
+        <a href="#">Text Analysis Tool</a> &nbsp;|&nbsp; Inspired by Voyant Tools &nbsp;|&nbsp; 2026
     </div>
 
-    <div id="statsModal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
-            <div class="modal-header">
-                <h2>Comprehensive Statistics</h2>
-                <button class="close" onclick="closeModal('statsModal')">×</button>
-            </div>
-            <div class="modal-body" id="statsResult">
-                <div class="loading"><div class="spinner"></div></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="speakerModal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
-            <div class="modal-header">
-                <h2>Speaker Duration Analysis (S vs T)</h2>
-                <button class="close" onclick="closeModal('speakerModal')">×</button>
-            </div>
-            <div class="modal-body" id="speakerResult">
-                <div class="loading"><div class="spinner"></div></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="timeModal" class="modal">
-        <div class="modal-content" style="max-width: 900px;">
-            <div class="modal-header">
-                <h2>Time & Duration Analytics</h2>
-                <button class="close" onclick="closeModal('timeModal')">×</button>
-            </div>
-            <div class="modal-body" id="timeResult">
-                <div class="loading"><div class="spinner"></div></div>
-            </div>
-        </div>
-    </div>
-
-    <footer>
-        Data Analytics Intelligence Hub • Powered by Python & Flask • © 2026
-    </footer>
-
-    <div class="toast-container" id="toastContainer"></div>
-    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFileSelect(event)">
+    <div class="toast" id="toast"></div>
 
     <script>
-        // Global Chart Defaults for Dark Theme
-        Chart.defaults.color = '#94a3b8';
-        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
-        Chart.defaults.font.family = "'Inter', sans-serif";
-        
-        let allCharts = {};
+        let excelFile1 = null;
+        let excelFile2 = null;
+        let subtitleFile = null;
 
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            
-            let icon = '';
-            if(type === 'success') icon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
-            else if(type === 'error') icon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
-            else icon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
-
-            toast.innerHTML = `<div class="toast-icon">${icon}</div><div style="font-weight: 500;">${message}</div>`;
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateY(20px)';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
+        function switchTab(tab, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab).classList.add('active');
+            btn.classList.add('active');
         }
 
-        function uploadFile() {
-            document.getElementById('fileInput').click();
-        }
-
-        async function handleFileSelect(event) {
-            const file = event.target.files[0];
+        function handleSlot(num, e) {
+            const file = e.target.files[0];
             if (!file) return;
+            if (num === 1) {
+                excelFile1 = file;
+                document.getElementById('slot1Name').textContent = 'Selected: ' + file.name;
+                document.getElementById('slot1').classList.add('has-file');
+            } else {
+                excelFile2 = file;
+                document.getElementById('slot2Name').textContent = 'Selected: ' + file.name;
+                document.getElementById('slot2').classList.add('has-file');
+            }
+        }
 
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('type', 'analysis');
+        function handleSubtitle(e) {
+            const file = e.target.files[0];
+            if (file) {
+                subtitleFile = file;
+                document.getElementById('subtitleName').textContent = 'Selected: ' + file.name;
+            }
+        }
 
+        function showLoader(show) {
+            document.getElementById('loader').classList.toggle('show', show);
+        }
+
+        function showToast(msg, type='error') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `toast show ${type}`;
+            setTimeout(() => t.classList.remove('show'), 3500);
+        }
+
+        async function analyzeText() {
+            const text = document.getElementById('textInput').value.trim();
+            if (!text) { showToast('Please enter some text to analyze'); return; }
+            showLoader(true);
+            const fd = new FormData();
+            fd.append('text', text);
             try {
-                showToast('Uploading and parsing document...', 'info');
-                const res = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await res.json();
-
-                if (data.ok) {
-                    showToast(`Success! Extracted ${data.sheets_loaded} sheets.`, 'success');
-                    await initDashboard();
-                } else {
-                    showToast(`Upload failed: ${data.error}`, 'error');
-                }
-            } catch (err) {
-                showToast(`Upload error: ${err.message}`, 'error');
-            }
-
-            event.target.value = '';
+                const r = await fetch('/api/upload', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.ok) { showToast('Ready!', 'success'); setTimeout(() => location.href='/analysis', 400); }
+                else showToast('Error: ' + d.error);
+            } catch(e) { showToast('Error: ' + e.message); }
+            finally { showLoader(false); }
         }
 
-        async function reloadData() {
+        async function analyzeExcel() {
+            if (!excelFile1 && !excelFile2) {
+                showToast('Please select at least one Excel file'); return;
+            }
+            showLoader(true);
             try {
-                showToast('Syncing data with server...', 'info');
-                const res = await fetch('/api/reload', { method: 'POST' });
-                const data = await res.json();
-
-                if (data.ok) {
-                    showToast(`System synced. Loaded ${data.sheets_loaded} sheets.`, 'success');
-                    await initDashboard();
-                } else {
-                    showToast(`Sync failed: ${data.error}`, 'error');
-                }
-            } catch (err) {
-                showToast(`Sync error: ${err.message}`, 'error');
-            }
+                const fd = new FormData();
+                if (excelFile1) fd.append('files', excelFile1);
+                if (excelFile2) fd.append('files', excelFile2);
+                const r = await fetch('/api/upload-multi', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.ok) { showToast('Ready!', 'success'); setTimeout(() => location.href='/analysis', 400); }
+                else showToast('Error: ' + d.error);
+            } catch(e) { showToast('Error: ' + e.message); }
+            finally { showLoader(false); }
         }
 
-        async function initDashboard() {
-            await Promise.all([
-                loadStats(),
-                loadCategories(),
-                loadSheets(),
-                loadWords(),
-                loadTrends()
-            ]);
+        async function analyzeFiles() {
+            if (!subtitleFile) { showToast('Please select a file'); return; }
+            showLoader(true);
+            const fd = new FormData();
+            fd.append('file', subtitleFile);
+            try {
+                const r = await fetch('/api/upload', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.ok) { showToast('Ready!', 'success'); setTimeout(() => location.href='/analysis', 400); }
+                else showToast('Error: ' + d.error);
+            } catch(e) { showToast('Error: ' + e.message); }
+            finally { showLoader(false); }
         }
 
-        async function loadStats() {
-            const res = await fetch('/api/stats');
-            const data = await res.json();
-            
-            const animateValue = (id, end) => {
-                const el = document.getElementById(id);
-                el.textContent = end.toLocaleString();
-            };
-
-            animateValue('totalSheets', data.total_sheets);
-            animateValue('totalRows', data.total_rows);
-            animateValue('totalCells', data.total_cells);
-            animateValue('maxColumns', data.max_columns);
+        function clearExcel() {
+            excelFile1 = excelFile2 = null;
+            ['excelInput1','excelInput2'].forEach(id => document.getElementById(id).value='');
+            ['slot1Name','slot2Name'].forEach(id => document.getElementById(id).textContent='');
+            ['slot1','slot2'].forEach(id => document.getElementById(id).classList.remove('has-file'));
         }
 
-        async function loadCategories() {
-            const res = await fetch('/api/categories');
-            const data = await res.json();
-            const overall = data.overall;
-
-            document.getElementById('cat1').textContent = overall['1'].toLocaleString();
-            document.getElementById('cat2').textContent = overall['2'].toLocaleString();
-            document.getElementById('cat3').textContent = overall['3'].toLocaleString();
-
-            if (allCharts.categoryChart) allCharts.categoryChart.destroy();
-
-            const ctx = document.createElement('canvas');
-            document.getElementById('categoryChart').innerHTML = '';
-            document.getElementById('categoryChart').appendChild(ctx);
-
-            allCharts.categoryChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Positive (1)', 'Negative (2)', 'Neutral (3)', 'Uncategorized'],
-                    datasets: [{
-                        data: [overall['1'], overall['2'], overall['3'], overall['other']],
-                        backgroundColor: ['#60a5fa', '#fbbf24', '#34d399', '#475569'],
-                        borderWidth: 0,
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '75%',
-                    plugins: { 
-                        legend: { 
-                            position: 'bottom', 
-                            labels: { padding: 20, usePointStyle: true, pointStyle: 'circle' } 
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            titleFont: { size: 14, family: "'Inter', sans-serif" },
-                            bodyFont: { size: 13, family: "'Inter', sans-serif" },
-                            padding: 12,
-                            cornerRadius: 8,
-                            boxPadding: 6
-                        }
-                    }
-                }
-            });
+        function clearFiles() {
+            subtitleFile = null;
+            document.getElementById('subtitleInput').value = '';
+            document.getElementById('subtitleName').textContent = '';
         }
-
-        async function loadSheets() {
-            const res = await fetch('/api/sheets');
-            const data = await res.json();
-
-            const list = document.getElementById('documentList');
-            let html = `
-                <li class="active" data-sheet="">
-                    <div class="doc-name">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: middle;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                        All Documents
-                    </div>
-                    <div class="doc-meta">Global View</div>
-                </li>
-            `;
-            html += data.map((sheet, idx) => `
-                <li data-sheet="${sheet.name.replace(/'/g, "&apos;")}">
-                    <div class="doc-name">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: middle;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                        ${sheet.name.length > 25 ? sheet.name.substring(0,25) + '...' : sheet.name}
-                    </div>
-                    <div class="doc-meta">${sheet.rows.toLocaleString()}R × ${sheet.columns}C</div>
-                </li>
-            `).join('');
-            list.innerHTML = html;
-
-            const s1 = document.getElementById('compareSheet1');
-            const s2 = document.getElementById('compareSheet2');
-            const options = data.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
-            s1.innerHTML = options;
-            s2.innerHTML = options;
-            if (data.length > 1) s2.value = data[1].name;
-        }
-
-        async function loadWords() {
-            await updateWordCloud();
-        }
-
-        async function updateWordCloud() {
-            const search = document.getElementById('searchInput').value;
-            const minFreq = document.getElementById('minFreq').value;
-            
-            let sheet = '';
-            const activeLi = document.querySelector('#documentList li.active');
-            if(activeLi) {
-                sheet = activeLi.getAttribute('data-sheet') || '';
-            }
-
-            document.getElementById('wordCloudLoading').style.display = 'flex';
-            document.getElementById('wordsTable').innerHTML = '<tr><td colspan="4" class="loading"><div class="spinner"></div></td></tr>';
-
-            const res = await fetch(`/api/text-analysis?search=${search}&min_freq=${minFreq}&sheet=${encodeURIComponent(sheet)}`);
-            const data = await res.json();
-            
-            const canvas = document.getElementById('wordCloudCanvas');
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-
-            if(Object.keys(data).length === 0) {
-                document.getElementById('wordCloudLoading').style.display = 'none';
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.font = "14px Inter";
-                ctx.fillStyle = "#94a3b8";
-                ctx.textAlign = "center";
-                ctx.fillText("No keywords found matching criteria.", canvas.width/2, canvas.height/2);
-                document.getElementById('wordsTable').innerHTML = '<tr><td colspan="4" style="text-align:center;">No data</td></tr>';
-                return;
-            }
-
-            const maxFreq = Math.max(...Object.values(data));
-            const list = Object.entries(data).map(([word, freq]) => {
-                const size = 16 + (freq / maxFreq) * 50; 
-                return [word, size];
-            });
-
-            WordCloud(canvas, {
-                list: list,
-                fontFamily: "'Inter', sans-serif",
-                weightFactor: 1,
-                color: function () {
-                    const colors = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#38bdf8', '#f8fafc'];
-                    return colors[Math.floor(Math.random() * colors.length)];
-                },
-                rotateRatio: 0.5,
-                rotationSteps: 2,
-                backgroundColor: 'transparent',
-                gridSize: Math.round(16 * canvas.offsetWidth / 1024),
-                minSize: 10,
-                drawOutOfBound: false,
-                shrinkToFit: true
-            });
-            
-            setTimeout(() => {
-                document.getElementById('wordCloudLoading').style.display = 'none';
-            }, 600);
-
-            const table = document.getElementById('wordsTable');
-            const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 20);
-            const maxVal = sorted[0][1];
-
-            table.innerHTML = sorted.map(([word, freq], idx) => {
-                const pct = (freq / maxVal) * 100;
-                return `
-                    <tr>
-                        <td style="text-align: center; color: var(--text-secondary); font-weight: 600;">#${idx + 1}</td>
-                        <td><strong style="color: var(--accent-primary); font-size: 1.05rem;">${word}</strong></td>
-                        <td style="font-weight: 500;">${freq.toLocaleString()}</td>
-                        <td>
-                            <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" style="width: ${pct}%;"></div>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
-
-        async function loadTrends() {
-            const res = await fetch('/api/categories');
-            const data = await res.json();
-            const bySheet = data.by_sheet;
-
-            const sheets = Object.keys(bySheet);
-            const cat1Data = sheets.map(s => bySheet[s]['1']);
-            const cat2Data = sheets.map(s => bySheet[s]['2']);
-            const cat3Data = sheets.map(s => bySheet[s]['3']);
-
-            if (allCharts.trendChart) allCharts.trendChart.destroy();
-
-            const ctx = document.createElement('canvas');
-            document.getElementById('trendsChart').innerHTML = '';
-            document.getElementById('trendsChart').appendChild(ctx);
-
-            allCharts.trendChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: sheets.map(s => s.length > 15 ? s.substring(0, 12) + '...' : s),
-                    datasets: [
-                        { 
-                            label: 'Positive (1)', 
-                            data: cat1Data, 
-                            borderColor: '#60a5fa', 
-                            backgroundColor: 'rgba(96, 165, 250, 0.1)',
-                            fill: true, 
-                            tension: 0.4, 
-                            borderWidth: 3,
-                            pointBackgroundColor: '#0f172a',
-                            pointBorderWidth: 2,
-                            pointRadius: 4,
-                            pointHoverRadius: 6
-                        },
-                        { 
-                            label: 'Negative (2)', 
-                            data: cat2Data, 
-                            borderColor: '#fbbf24', 
-                            backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                            fill: true, 
-                            tension: 0.4, 
-                            borderWidth: 3,
-                            pointBackgroundColor: '#0f172a',
-                            pointBorderWidth: 2,
-                            pointRadius: 4,
-                            pointHoverRadius: 6
-                        },
-                        { 
-                            label: 'Neutral (3)', 
-                            data: cat3Data, 
-                            borderColor: '#34d399', 
-                            backgroundColor: 'rgba(52, 211, 153, 0.1)',
-                            fill: true, 
-                            tension: 0.4, 
-                            borderWidth: 3,
-                            pointBackgroundColor: '#0f172a',
-                            pointBorderWidth: 2,
-                            pointRadius: 4,
-                            pointHoverRadius: 6
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
-                    plugins: { 
-                        legend: { 
-                            position: 'top', 
-                            labels: { usePointStyle: true, padding: 20 } 
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            titleFont: { size: 14 },
-                            bodyFont: { size: 13 },
-                            padding: 12,
-                            cornerRadius: 8
-                        }
-                    },
-                    scales: { 
-                        y: { 
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255,255,255,0.05)' }
-                        },
-                        x: {
-                            grid: { display: false }
-                        }
-                    }
-                }
-            });
-        }
-
-        function showModal(id) {
-            const modal = document.getElementById(id);
-            modal.style.display = 'flex';
-            // Trigger reflow
-            void modal.offsetWidth;
-            modal.classList.add('show');
-        }
-
-        function closeModal(modalId) {
-            const modal = document.getElementById(modalId);
-            modal.classList.remove('show');
-            setTimeout(() => {
-                modal.style.display = 'none';
-            }, 300);
-        }
-
-        function showComparison() {
-            showModal('comparisonModal');
-            compareSheets();
-        }
-
-        async function compareSheets() {
-            const s1 = document.getElementById('compareSheet1').value;
-            const s2 = document.getElementById('compareSheet2').value;
-
-            document.getElementById('comparisonResult').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-            const res = await fetch(`/api/comparison?sheet1=${encodeURIComponent(s1)}&sheet2=${encodeURIComponent(s2)}`);
-            const data = await res.json();
-
-            const diffRows = Math.abs(data.sheet1.rows - data.sheet2.rows);
-            const diffCols = Math.abs(data.sheet1.cols - data.sheet2.cols);
-
-            document.getElementById('comparisonResult').innerHTML = `
-                <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 20px;">
-                    <div class="stat-card" style="border-left-color: #60a5fa;">
-                        <div class="stat-label">Doc 1 Rows</div>
-                        <div class="stat-value">${data.sheet1.rows.toLocaleString()}</div>
-                    </div>
-                    <div class="stat-card" style="border-left-color: #60a5fa;">
-                        <div class="stat-label">Doc 1 Cols</div>
-                        <div class="stat-value">${data.sheet1.cols}</div>
-                    </div>
-                    <div class="stat-card" style="border-left-color: #a78bfa;">
-                        <div class="stat-label">Doc 2 Rows</div>
-                        <div class="stat-value">${data.sheet2.rows.toLocaleString()}</div>
-                    </div>
-                    <div class="stat-card" style="border-left-color: #a78bfa;">
-                        <div class="stat-label">Doc 2 Cols</div>
-                        <div class="stat-value">${data.sheet2.cols}</div>
-                    </div>
-                </div>
-                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); padding: 16px; border-radius: var(--radius-md); margin-top: 15px; display: flex; align-items: center; gap: 12px;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                    <div>
-                        <strong style="color: #f8fafc; display: block; margin-bottom: 4px;">Variance Analysis</strong>
-                        <span style="color: var(--text-secondary);">Row Delta: <b style="color: #f8fafc;">${diffRows.toLocaleString()}</b> &nbsp;|&nbsp; Column Delta: <b style="color: #f8fafc;">${diffCols}</b></span>
-                    </div>
-                </div>
-            `;
-        }
-
-        async function showDetailedStats() {
-            showModal('statsModal');
-            document.getElementById('statsResult').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-            const res = await fetch('/api/stats/detailed');
-            const data = await res.json();
-
-            let html = `
-            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 24px;">
-                <div class="stat-card">
-                    <div class="stat-label">Total Documents</div>
-                    <div class="stat-value">${data.total_sheets}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Aggregate Rows</div>
-                    <div class="stat-value">${data.total_rows.toLocaleString()}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Aggregate Columns</div>
-                    <div class="stat-value">${data.total_cols.toLocaleString()}</div>
-                </div>
-            </div>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Document Name</th>
-                            <th>Rows</th>
-                            <th>Missing Vals</th>
-                            <th>Duplicates</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
-
-            data.sheets.forEach(s => {
-                html += `<tr>
-                    <td style="font-weight: 500;">${s.name}</td>
-                    <td>${s.rows.toLocaleString()}</td>
-                    <td style="color: ${s.missing > 0 ? '#f59e0b' : 'inherit'};">${s.missing.toLocaleString()}</td>
-                    <td style="color: ${s.duplicates > 0 ? '#ef4444' : 'inherit'};">${s.duplicates.toLocaleString()}</td>
-                </tr>`;
-            });
-
-            html += `</tbody></table></div>`;
-            document.getElementById('statsResult').innerHTML = html;
-        }
-
-        function exportCSV() {
-            const activeEl = document.querySelector('.document-list li.active .doc-name');
-            if(!activeEl) {
-                showToast('No active sheet selected', 'warning');
-                return;
-            }
-            const sheet = activeEl.textContent.trim();
-            window.location.href = `/api/export/csv?sheet=${encodeURIComponent(sheet)}`;
-        }
-
-        function exportAll() {
-            window.location.href = '/api/export/all';
-            showToast('Generating universal export file...', 'info');
-        }
-
-        function formatTime(seconds) {
-            if (seconds < 60) return seconds.toFixed(1) + ' s';
-            return (seconds / 60).toFixed(1) + ' m';
-        }
-
-        async function showSpeakerAnalysis() {
-            showModal('speakerModal');
-            document.getElementById('speakerResult').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-            const res = await fetch('/api/speaker-time');
-            const data = await res.json();
-
-            if (data.s_time === 0 && data.t_time === 0) {
-                document.getElementById('speakerResult').innerHTML = `
-                    <div style="padding: 40px 20px; text-align: center; background: rgba(0,0,0,0.2); border-radius: var(--radius-md);">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" style="margin-bottom: 16px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                        <h3 style="color: #f8fafc; font-size: 1.2rem; margin-bottom: 8px;">No Speaker Data Found</h3>
-                        <p style="color: var(--text-secondary);">We couldn't extract 'S' and 'T' speaking data from 'Sheet1' in your time file.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const sMins = (data.s_time / 60).toFixed(1);
-            const tMins = (data.t_time / 60).toFixed(1);
-            
-            let timelineHtml = '<div style="margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;"><h3>Speaker Timeline Sequence</h3><div style="max-height: 200px; overflow-y: auto; margin-top: 15px; padding-right: 10px;">';
-            
-            data.timeline.forEach(item => {
-                const isS = item.speaker === 'S';
-                timelineHtml += `
-                <div style="display: flex; margin-bottom: 8px; font-size: 0.9rem;">
-                    <div style="width: 80px; color: var(--text-secondary);">${formatTime(item.start)}</div>
-                    <div style="flex: 1; border-left: 2px solid ${isS ? '#3b82f6' : '#ef4444'}; padding-left: 10px; margin-left: 10px;">
-                        <strong style="color: ${isS ? '#3b82f6' : '#ef4444'};">${isS ? 'Student (S)' : 'Teacher (T)'}</strong> 
-                        <span style="color: var(--text-secondary); font-size: 0.8rem; margin-left: 8px;">Duration: ${item.duration}s</span>
-                    </div>
-                </div>`;
-            });
-            timelineHtml += '</div></div>';
-
-            let html = `
-            <div class="stats-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 24px;">
-                <div class="stat-card" style="border-left-color: #3b82f6;">
-                    <div class="stat-label">Student (S) Total Time</div>
-                    <div class="stat-value">${sMins} mins <span style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;">(${data.s_time}s)</span></div>
-                </div>
-                <div class="stat-card" style="border-left-color: #ef4444;">
-                    <div class="stat-label">Teacher (T) Total Time</div>
-                    <div class="stat-value">${tMins} mins <span style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal;">(${data.t_time}s)</span></div>
-                </div>
-            </div>
-            
-            <div class="chart-container" style="height: 300px;">
-                <canvas id="speakerChart"></canvas>
-            </div>
-            
-            ${timelineHtml}
-            `;
-
-            document.getElementById('speakerResult').innerHTML = html;
-
-            const ctx = document.getElementById('speakerChart');
-            new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: ['Student (S)', 'Teacher (T)'],
-                    datasets: [{
-                        data: [sMins, tMins],
-                        backgroundColor: ['rgba(59, 130, 246, 0.8)', 'rgba(239, 68, 68, 0.8)'],
-                        borderColor: ['#3b82f6', '#ef4444'],
-                        borderWidth: 0,
-                        hoverOffset: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { font: { size: 14 } } },
-                        tooltip: { callbacks: { label: function(context) { return context.label + ': ' + context.raw + ' mins'; } } }
-                    }
-                }
-            });
-        }
-
-        async function showTimeAnalysis() {
-            showModal('timeModal');
-            document.getElementById('timeResult').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-            const res = await fetch('/api/time-analysis');
-            const data = await res.json();
-
-            if (data.error || Object.keys(data.stats).length === 0) {
-                document.getElementById('timeResult').innerHTML = `
-                    <div style="padding: 40px 20px; text-align: center; background: rgba(0,0,0,0.2); border-radius: var(--radius-md);">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" style="margin-bottom: 16px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                        <h3 style="color: #f8fafc; font-size: 1.2rem; margin-bottom: 8px;">Time Metadata Unavailable</h3>
-                        <p style="color: var(--text-secondary);">We couldn't extract reliable duration metrics from the current dataset.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            let html = `
-            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 24px;">
-                <div class="stat-card" style="border-left-color: #8b5cf6;">
-                    <div class="stat-label">Total Duration Analyzed</div>
-                    <div class="stat-value">${formatTime(data.overall.total_time)}</div>
-                </div>
-                <div class="stat-card" style="border-left-color: #8b5cf6;">
-                    <div class="stat-label">Avg Duration / Entry</div>
-                    <div class="stat-value">${formatTime(data.overall.avg_time)}</div>
-                </div>
-                <div class="stat-card" style="border-left-color: #8b5cf6;">
-                    <div class="stat-label">Valid Time Entries</div>
-                    <div class="stat-value">${data.overall.total_responses.toLocaleString()}</div>
-                </div>
-            </div>`;
-
-            html += `<div class="table-container"><table>
-                <thead>
-                    <tr>
-                        <th>Subject Category</th>
-                        <th>Avg Time</th>
-                        <th>Min Time</th>
-                        <th>Max Time</th>
-                        <th>Total Time</th>
-                        <th>Entries</th>
-                    </tr>
-                </thead>
-                <tbody>`;
-
-            for (let sheet in data.stats) {
-                const stats = data.stats[sheet];
-                html += `<tr>
-                    <td style="font-weight: 500; color: #a78bfa;">${sheet}</td>
-                    <td>${formatTime(stats.avg_seconds)}</td>
-                    <td>${formatTime(stats.min_seconds)}</td>
-                    <td>${formatTime(stats.max_seconds)}</td>
-                    <td>${formatTime(stats.total_seconds)}</td>
-                    <td>${stats.count.toLocaleString()}</td>
-                </tr>`;
-            }
-            html += `</tbody></table></div>`;
-
-            document.getElementById('timeResult').innerHTML = html;
-        }
-
-        window.onclick = function(event) {
-            if (event.target.classList.contains('modal')) {
-                closeModal(event.target.id);
-            }
-        }
-
-        document.getElementById('compareSheet1').addEventListener('change', compareSheets);
-        document.getElementById('compareSheet2').addEventListener('change', compareSheets);
-        document.getElementById('searchInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') updateWordCloud();
-        });
-
-        // Add active state to document list clicks
-        document.getElementById('documentList').addEventListener('click', (e) => {
-            const li = e.target.closest('li');
-            if(li && !li.classList.contains('loading')) {
-                document.querySelectorAll('#documentList li').forEach(el => el.classList.remove('active'));
-                li.classList.add('active');
-                updateWordCloud();
-            }
-        });
-
-        document.addEventListener('DOMContentLoaded', initDashboard);
     </script>
 </body>
 </html>

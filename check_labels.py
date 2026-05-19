@@ -4,7 +4,7 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 # Find C column errors in File 1
-wb1 = openpyxl.load_workbook(r'C:\Users\Dell\Downloads\50_analysis (2) (1).xlsx')
+wb1 = openpyxl.load_workbook(r'C:\Users\Dell\Downloads\50_analysis (2).xlsx')
 normal_labels = {'Багш', 'Багш ', 'Сурагч', 'Сурагч ', 'Сурагчид', 'Сурагчид ', 'Сурагч Б', 'Цаг'}
 
 for sheet_name in wb1.sheetnames:

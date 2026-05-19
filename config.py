@@ -4,9 +4,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ANALYSIS_FILE = Path(os.getenv("ANALYSIS_FILE", "50_analysis.xlsx"))
-TIME_FILE = Path(os.getenv("TIME_FILE", "DATA_time.xlsx"))
 UPLOAD_FOLDER = Path(os.getenv("UPLOAD_FOLDER", "uploads"))
-CACHE_TTL = int(os.getenv("CACHE_TTL", 300))
-PORT = int(os.getenv("PORT", 8000))
+MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB max upload
+ALLOWED_VIDEO = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4a', '.wav', '.mp3'}
+ALLOWED_SUBTITLE = {'.srt', '.vtt', '.txt'}
+ALLOWED_EXCEL = {'.xlsx', '.xls'}
+PORT = int(os.getenv("PORT", 5000))
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"

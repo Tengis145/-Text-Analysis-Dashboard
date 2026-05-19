@@ -51,7 +51,7 @@ with pd.ExcelWriter(f"{output_dir}/50_analysis_CLEANED.xlsx", engine='openpyxl')
         print(f"  After: {df.shape[0]} rows × {df.shape[1]} cols")
         print(f"  Missing cells: {missing_after}")
         print(f"  Duplicate rows: {duplicates_after}")
-        print(f"  ✓ Cleaned successfully")
+        print(f"  Cleaned successfully")
 
         # Write to new file
         df.to_excel(writer, sheet_name=sheet_name, index=False)
@@ -95,18 +95,18 @@ with pd.ExcelWriter(f"{output_dir}/DATA_time_CLEANED.xlsx", engine='openpyxl') a
         print(f"  After: {df.shape[0]} rows × {df.shape[1]} cols")
         print(f"  Missing cells: {missing_after}")
         print(f"  Duplicate rows: {duplicates_after}")
-        print(f"  ✓ Cleaned successfully")
+        print(f"  Cleaned successfully")
 
         # Write to new file
         df.to_excel(writer, sheet_name=sheet_name, index=False)
 
 print("\n" + "="*70)
-print("✓ CLEANING COMPLETE!")
+print("CLEANING COMPLETE!")
 print("="*70)
 print(f"\nCleaned files saved to:")
-print(f"  📁 {output_dir}/")
-print(f"  📄 50_analysis_CLEANED.xlsx")
-print(f"  📄 DATA_time_CLEANED.xlsx")
+print(f"  {output_dir}/")
+print(f"  50_analysis_CLEANED.xlsx")
+print(f"  DATA_time_CLEANED.xlsx")
 print(f"\nNext steps:")
 print(f"  1. Review the cleaned files")
 print(f"  2. Replace original files if satisfied")

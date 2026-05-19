@@ -259,13 +259,13 @@ if __name__ == '__main__':
     f1_out = r'C:\Users\Dell\Downloads\50_analysis_FIXED.xlsx'
     count1, log1 = apply_fixes(f1_path, file1_replacements, f1_out)
 
-    print(f"\n✅ Нийт {count1} засвар хийгдлээ.")
+    print(f"\nНийт {count1} засвар хийгдлээ.")
     for item in log1:
         print(f"\n  [{item['sheet']}] Row {item['row']}, {item['cell']}:")
         print(f"    ӨМНӨ:  {item['before']}")
         print(f"    ДАРАА:  {item['after']}")
 
-    print(f"\n📁 Хадгалсан: {f1_out}")
+    print(f"\nХадгалсан: {f1_out}")
 
     print("\n" + "=" * 70)
     print("  ФАЙЛ 2: DATA_time (1) (1) (1).xlsx засварлаж байна...")
@@ -275,13 +275,13 @@ if __name__ == '__main__':
     f2_out = r'C:\Users\Dell\Downloads\DATA_time_FIXED.xlsx'
     count2, log2 = apply_fixes(f2_path, file2_replacements, f2_out)
 
-    print(f"\n✅ Нийт {count2} засвар хийгдлээ.")
+    print(f"\nНийт {count2} засвар хийгдлээ.")
     for item in log2:
         print(f"\n  [{item['sheet']}] Row {item['row']}, {item['cell']}:")
         print(f"    ӨМНӨ:  {item['before']}")
         print(f"    ДАРАА:  {item['after']}")
 
-    print(f"\n📁 Хадгалсан: {f2_out}")
+    print(f"\nХадгалсан: {f2_out}")
     print("\n" + "=" * 70)
-    print(f"  🎯 НИЙТ: {count1 + count2} засвар 2 файлд хийгдлээ.")
+    print(f"  НИЙТ: {count1 + count2} засвар 2 файлд хийгдлээ.")
     print("=" * 70)

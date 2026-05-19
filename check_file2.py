@@ -4,7 +4,7 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 # File 2 full check
-wb2 = openpyxl.load_workbook(r'C:\Users\Dell\Downloads\DATA_time (1) (1) (1).xlsx')
+wb2 = openpyxl.load_workbook(r'"C:\Users\Dell\Downloads\DATA_time (1) (1).xlsx"')
 for sheet_name in wb2.sheetnames:
     ws = wb2[sheet_name]
     if ws.max_row <= 5:
