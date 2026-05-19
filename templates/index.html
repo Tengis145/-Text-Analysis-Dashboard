@@ -308,7 +308,7 @@
 <body>
     <div class="header">
         <div class="logo">
-            T<span class="owl">🦉</span>XT ANALYZER
+            T<span class="owl">E</span>XT ANALYZER
         </div>
         <div class="tagline">see through your text</div>
     </div>
@@ -317,8 +317,8 @@
         <div class="container-header">
             <span>Add Texts</span>
             <div class="container-header-icons">
-                <span title="Copy link">🔗</span>
-                <span title="Toggle">🔵</span>
+                <span title="Copy link">link</span>
+                <span title="Toggle">[ ]</span>
                 <span title="Help">?</span>
             </div>
         </div>
@@ -333,11 +333,11 @@
             <div id="text" class="tab-content active">
                 <textarea id="textInput" placeholder="Type in one or more URLs on separate lines or paste in a full text."></textarea>
                 <div class="tip-box">
-                    <span class="tip-icon">ℹ️</span>
-                    <span><strong>Did you know?</strong> Help and options are available!</span>
+                    <span class="tip-icon">(i)</span>
+                    <span><strong>Tip:</strong> Paste text, enter URLs one per line, or switch tabs to upload files.</span>
                 </div>
                 <div class="btn-row">
-                    <button class="btn-reveal" onclick="analyzeText()">&#10003; Reveal</button>
+                    <button class="btn-reveal" onclick="analyzeText()">Reveal</button>
                     <button class="btn-clear" onclick="document.getElementById('textInput').value=''">Clear</button>
                 </div>
             </div>
@@ -347,7 +347,7 @@
                 <div class="excel-slots">
                     <!-- Slot 1 -->
                     <div class="excel-slot" id="slot1" onclick="document.getElementById('excelInput1').click()">
-                        <div class="slot-icon">📊</div>
+                        <div class="slot-icon">[XLS]</div>
                         <div class="slot-label">Document 1</div>
                         <div class="slot-sub">Click to upload Excel file<br>(.xlsx / .xls)</div>
                         <div class="slot-filename" id="slot1Name"></div>
@@ -355,7 +355,7 @@
                     </div>
                     <!-- Slot 2 -->
                     <div class="excel-slot" id="slot2" onclick="document.getElementById('excelInput2').click()">
-                        <div class="slot-icon">📈</div>
+                        <div class="slot-icon">[XLS]</div>
                         <div class="slot-label">Document 2</div>
                         <div class="slot-sub">Click to upload Excel file<br>(.xlsx / .xls)</div>
                         <div class="slot-filename" id="slot2Name"></div>
@@ -367,7 +367,7 @@
                     Supports .xlsx and .xls formats with multiple sheets.
                 </div>
                 <div class="btn-row">
-                    <button class="btn-reveal" onclick="analyzeExcel()" id="analyzeExcelBtn">&#10003; Reveal</button>
+                    <button class="btn-reveal" onclick="analyzeExcel()" id="analyzeExcelBtn">Reveal</button>
                     <button class="btn-clear" onclick="clearExcel()">Clear</button>
                 </div>
             </div>
@@ -376,7 +376,7 @@
             <div id="files" class="tab-content">
                 <div class="excel-slot" style="width:100%; display:block; text-align:center; margin-bottom:14px;"
                      onclick="document.getElementById('subtitleInput').click()">
-                    <div class="slot-icon">📄</div>
+                    <div class="slot-icon">[TXT]</div>
                     <div class="slot-label">Upload SRT / VTT / TXT file</div>
                     <div class="slot-sub">Transcript or subtitle file</div>
                     <div class="slot-filename" id="subtitleName"></div>
@@ -386,7 +386,7 @@
                     Upload a subtitle or transcript file to analyze word frequency, trends, and contexts.
                 </div>
                 <div class="btn-row">
-                    <button class="btn-reveal" onclick="analyzeFiles()">&#10003; Reveal</button>
+                    <button class="btn-reveal" onclick="analyzeFiles()">Reveal</button>
                     <button class="btn-clear" onclick="clearFiles()">Clear</button>
                 </div>
             </div>
@@ -421,11 +421,11 @@
             if (!file) return;
             if (num === 1) {
                 excelFile1 = file;
-                document.getElementById('slot1Name').textContent = '✓ ' + file.name;
+                document.getElementById('slot1Name').textContent = 'Selected: ' + file.name;
                 document.getElementById('slot1').classList.add('has-file');
             } else {
                 excelFile2 = file;
-                document.getElementById('slot2Name').textContent = '✓ ' + file.name;
+                document.getElementById('slot2Name').textContent = 'Selected: ' + file.name;
                 document.getElementById('slot2').classList.add('has-file');
             }
         }
@@ -434,7 +434,7 @@
             const file = e.target.files[0];
             if (file) {
                 subtitleFile = file;
-                document.getElementById('subtitleName').textContent = '✓ ' + file.name;
+                document.getElementById('subtitleName').textContent = 'Selected: ' + file.name;
             }
         }
 

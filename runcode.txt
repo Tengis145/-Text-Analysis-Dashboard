@@ -1,0 +1,6 @@
+1.  
+code "C:\Users\Dell\Documents\Мэдээллийн системийн менежмент\bie-daalt2"
+2.
+python app.py
+3.
+flask run --host=0.0.0.0 --port=5000

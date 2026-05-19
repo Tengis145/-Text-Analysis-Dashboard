@@ -406,13 +406,13 @@
 <!-- TOP BAR -->
 <div class="topbar">
     <div class="topbar-logo">
-        🦉 Text Analysis Dashboard
+        Text Analysis Dashboard
     </div>
     <div class="topbar-icons">
-        <span onclick="location.href='/'" title="Home">🏠</span>
-        <span onclick="downloadReport()" title="Export">📤</span>
-        <span onclick="location.href='/'" title="New">✚</span>
-        <span title="Fullscreen">⛶</span>
+        <span onclick="location.href='/'" title="Home">Home</span>
+        <span onclick="downloadReport()" title="Export">Export</span>
+        <span onclick="location.href='/'" title="New">New</span>
+        <span title="Fullscreen">Full</span>
         <span title="Help">?</span>
     </div>
 </div>
@@ -424,7 +424,7 @@
     <div class="panel">
         <div class="panel-tabs">
             <button class="ptab active ptab-cloud" onclick="switchPanelTab(this, 'cloudView')">
-                <span class="ptab-icon">👁</span> Cirrus
+                Cirrus
             </button>
             <button class="ptab" onclick="switchPanelTab(this, 'termsView')">
                 <span class="ptab-icon">≡</span> Terms
@@ -454,10 +454,10 @@
     <div class="panel" style="display:flex; flex-direction:column;">
         <div class="panel-tabs">
             <button class="ptab active" onclick="switchPanelTab(this, 'readerView')">
-                <span class="ptab-icon">📄</span> Reader
+                Reader
             </button>
             <button class="ptab" onclick="switchPanelTab(this, 'termsBerryView')">
-                <span class="ptab-icon">🫧</span> TermsBerry
+                TermsBerry
             </button>
             <span class="ptab-help">?</span>
         </div>
@@ -476,7 +476,7 @@
             </div>
             <div class="panel-view" id="termsBerryView">
                 <div style="padding:12px; font-size:0.82em; color:#888; text-align:center; margin-top:30px;">
-                    🫧 TermsBerry shows terms as interactive bubbles.<br>
+                    TermsBerry shows terms as interactive bubbles.<br>
                     <span style="color:#1a5276; margin-top:8px; display:block;">Click a word in the Cirrus cloud to highlight it here.</span>
                     <div id="termsberryBubbles" style="margin-top:16px; display:flex; flex-wrap:wrap; gap:6px; justify-content:center;"></div>
                 </div>
@@ -488,7 +488,7 @@
     <div class="panel" style="display:flex; flex-direction:column;">
         <div class="panel-tabs">
             <button class="ptab active" onclick="switchPanelTab(this, 'trendsView')">
-                <span class="ptab-icon">📈</span> Trends
+                Trends
             </button>
             <button class="ptab" onclick="switchPanelTab(this, 'docTermsView')">
                 <span class="ptab-icon">≡</span> Document Terms
@@ -517,10 +517,10 @@
     <div class="panel">
         <div class="panel-tabs">
             <button class="ptab active" onclick="switchPanelTab(this, 'summaryView')">
-                <span class="ptab-icon">📋</span> Summary
+                Summary
             </button>
             <button class="ptab" onclick="switchPanelTab(this, 'documentsView')">
-                <span class="ptab-icon">📂</span> Documents
+                Documents
             </button>
             <span class="ptab-help">?</span>
         </div>
@@ -542,10 +542,10 @@
     <div class="panel">
         <div class="panel-tabs">
             <button class="ptab active" onclick="switchPanelTab(this, 'contextsView')">
-                <span class="ptab-icon">🔍</span> Contexts
+                Contexts
             </button>
             <button class="ptab" onclick="switchPanelTab(this, 'collocatesView')">
-                <span class="ptab-icon">🔗</span> Collocates
+                Collocates
             </button>
             <span class="ptab-help">?</span>
         </div>
@@ -572,10 +572,10 @@
     <div class="panel">
         <div class="panel-tabs">
             <button class="ptab active" onclick="switchPanelTab(this, 'bubblesView')">
-                <span class="ptab-icon">〰</span> Bubblelines
+                Bubblelines
             </button>
             <button class="ptab" onclick="switchPanelTab(this, 'phrasesView')">
-                <span class="ptab-icon">📝</span> Phrases
+                Phrases
             </button>
             <span class="ptab-help">?</span>
         </div>
@@ -751,7 +751,7 @@ async function loadSummary() {
 
         document.getElementById('documentsContent').innerHTML = `
             <div style="font-size:0.85em;">
-                <div style="font-weight:700; color:#1a5276; margin-bottom:6px;">📂 Document</div>
+                <div style="font-weight:700; color:#1a5276; margin-bottom:6px;">Document</div>
                 <div>Total Words: <strong>${d.total_words.toLocaleString()}</strong></div>
                 <div>Unique Words: <strong>${d.unique_words.toLocaleString()}</strong></div>
                 <div>Vocabulary Density: <strong>${(d.vocab_density * 100).toFixed(1)}%</strong></div>
