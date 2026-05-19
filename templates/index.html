@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Analysis Tool — See Through Your Text</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f0f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 36px;
+        }
+
+        .logo {
+            font-size: 4em;
+            font-weight: 900;
+            color: #1a1a1a;
+            letter-spacing: 4px;
+            font-family: Georgia, serif;
+        }
+
+        .logo span { color: #c0392b; }
+
+        .owl {
+            display: inline-block;
+            width: 70px;
+            height: 70px;
+            background: radial-gradient(circle, #c0392b 55%, #1a1a1a 56%);
+            border-radius: 50%;
+            border: 4px solid #1a1a1a;
+            vertical-align: middle;
+            margin: 0 6px;
+            position: relative;
+            font-size: 2.2em;
+            line-height: 62px;
+            text-align: center;
+        }
+
+        .tagline {
+            font-size: 1.15em;
+            color: #c0392b;
+            font-style: italic;
+            margin-top: 6px;
+            font-family: Georgia, serif;
+        }
+
+        .container {
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+            max-width: 720px;
+            width: 100%;
+        }
+
+        .container-header {
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+            padding: 10px 14px;
+            font-size: 0.88em;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .container-header-icons {
+            display: flex;
+            gap: 6px;
+            color: #888;
+            font-size: 1em;
+        }
+
+        .container-body {
+            padding: 24px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .tab-btn {
+            padding: 9px 18px;
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            font-size: 0.92em;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .tab-btn:hover { color: #2471a3; }
+
+        .tab-btn.active {
+            color: #2471a3;
+            border-bottom-color: #2471a3;
+            font-weight: 700;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        textarea {
+            width: 100%;
+            height: 180px;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.88em;
+            resize: vertical;
+            color: #555;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #2471a3;
+        }
+
+        textarea::placeholder { color: #aaa; }
+
+        /* Excel two-slot layout */
+        .excel-slots {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 6px;
+        }
+
+        .excel-slot {
+            border: 2px dashed #aac4e0;
+            border-radius: 4px;
+            padding: 20px 12px;
+            text-align: center;
+            cursor: pointer;
+            background: #f7fbff;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .excel-slot:hover {
+            border-color: #2471a3;
+            background: #eaf4ff;
+        }
+
+        .excel-slot.has-file {
+            border-color: #27ae60;
+            background: #f0fff4;
+        }
+
+        .slot-icon { font-size: 2em; margin-bottom: 6px; }
+
+        .slot-label {
+            font-size: 0.82em;
+            color: #2471a3;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .slot-sub {
+            font-size: 0.76em;
+            color: #999;
+        }
+
+        .slot-filename {
+            font-size: 0.78em;
+            color: #27ae60;
+            font-weight: 600;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+
+        .file-input { display: none; }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 22px;
+            align-items: center;
+        }
+
+        .btn-reveal {
+            flex: 1;
+            padding: 13px;
+            background: #2471a3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-reveal:hover { background: #1a5276; }
+        .btn-reveal:disabled { background: #aaa; cursor: not-allowed; }
+
+        .btn-clear {
+            padding: 11px 18px;
+            background: #f0f0f0;
+            color: #555;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.92em;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-clear:hover { background: #e0e0e0; }
+
+        .help-note {
+            font-size: 0.8em;
+            color: #999;
+            margin-top: 12px;
+            line-height: 1.6;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 16px;
+        }
+
+        .loader.show { display: block; }
+
+        .spinner {
+            border: 3px solid #eee;
+            border-top: 3px solid #2471a3;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            animation: spin 0.9s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: white;
+            padding: 12px 18px;
+            border-radius: 4px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 1000;
+            font-size: 0.9em;
+        }
+
+        .toast.show { display: block; }
+        .toast.error { border-left: 4px solid #c0392b; color: #c0392b; }
+        .toast.success { border-left: 4px solid #27ae60; color: #27ae60; }
+
+        .footer {
+            margin-top: 28px;
+            text-align: center;
+            color: #aaa;
+            font-size: 0.78em;
+            line-height: 1.7;
+        }
+
+        .footer a { color: #2471a3; text-decoration: none; }
+
+        /* Did you know tooltip */
+        .tip-box {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px 14px;
+            font-size: 0.82em;
+            color: #555;
+            margin-top: 14px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .tip-icon { color: #2471a3; font-size: 1.1em; flex-shrink: 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            T<span class="owl">🦉</span>XT ANALYZER
+        </div>
+        <div class="tagline">see through your text</div>
+    </div>
+
+    <div class="container">
+        <div class="container-header">
+            <span>Add Texts</span>
+            <div class="container-header-icons">
+                <span title="Copy link">🔗</span>
+                <span title="Toggle">🔵</span>
+                <span title="Help">?</span>
+            </div>
+        </div>
+        <div class="container-body">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('text', this)">Text Input</button>
+                <button class="tab-btn" onclick="switchTab('excel', this)">Excel Files</button>
+                <button class="tab-btn" onclick="switchTab('files', this)">Subtitles / TXT</button>
+            </div>
+
+            <!-- Text Input -->
+            <div id="text" class="tab-content active">
+                <textarea id="textInput" placeholder="Type in one or more URLs on separate lines or paste in a full text."></textarea>
+                <div class="tip-box">
+                    <span class="tip-icon">ℹ️</span>
+                    <span><strong>Did you know?</strong> Help and options are available!</span>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-reveal" onclick="analyzeText()">&#10003; Reveal</button>
+                    <button class="btn-clear" onclick="document.getElementById('textInput').value=''">Clear</button>
+                </div>
+            </div>
+
+            <!-- Excel Files (2 slots) -->
+            <div id="excel" class="tab-content">
+                <div class="excel-slots">
+                    <!-- Slot 1 -->
+                    <div class="excel-slot" id="slot1" onclick="document.getElementById('excelInput1').click()">
+                        <div class="slot-icon">📊</div>
+                        <div class="slot-label">Document 1</div>
+                        <div class="slot-sub">Click to upload Excel file<br>(.xlsx / .xls)</div>
+                        <div class="slot-filename" id="slot1Name"></div>
+                        <input type="file" id="excelInput1" class="file-input" accept=".xlsx,.xls" onchange="handleSlot(1, event)">
+                    </div>
+                    <!-- Slot 2 -->
+                    <div class="excel-slot" id="slot2" onclick="document.getElementById('excelInput2').click()">
+                        <div class="slot-icon">📈</div>
+                        <div class="slot-label">Document 2</div>
+                        <div class="slot-sub">Click to upload Excel file<br>(.xlsx / .xls)</div>
+                        <div class="slot-filename" id="slot2Name"></div>
+                        <input type="file" id="excelInput2" class="file-input" accept=".xlsx,.xls" onchange="handleSlot(2, event)">
+                    </div>
+                </div>
+                <div class="help-note">
+                    Upload one or two Excel files. Their text content will be combined and analyzed together.
+                    Supports .xlsx and .xls formats with multiple sheets.
+                </div>
+                <div class="btn-row">
+                    <button class="btn-reveal" onclick="analyzeExcel()" id="analyzeExcelBtn">&#10003; Reveal</button>
+                    <button class="btn-clear" onclick="clearExcel()">Clear</button>
+                </div>
+            </div>
+
+            <!-- Subtitles / TXT -->
+            <div id="files" class="tab-content">
+                <div class="excel-slot" style="width:100%; display:block; text-align:center; margin-bottom:14px;"
+                     onclick="document.getElementById('subtitleInput').click()">
+                    <div class="slot-icon">📄</div>
+                    <div class="slot-label">Upload SRT / VTT / TXT file</div>
+                    <div class="slot-sub">Transcript or subtitle file</div>
+                    <div class="slot-filename" id="subtitleName"></div>
+                    <input type="file" id="subtitleInput" class="file-input" accept=".srt,.vtt,.txt" onchange="handleSubtitle(event)">
+                </div>
+                <div class="help-note">
+                    Upload a subtitle or transcript file to analyze word frequency, trends, and contexts.
+                </div>
+                <div class="btn-row">
+                    <button class="btn-reveal" onclick="analyzeFiles()">&#10003; Reveal</button>
+                    <button class="btn-clear" onclick="clearFiles()">Clear</button>
+                </div>
+            </div>
+
+            <div class="loader" id="loader">
+                <div class="spinner"></div>
+                <div style="color:#888; font-size:0.9em;">Processing your content…</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <a href="#">Text Analysis Tool</a> &nbsp;|&nbsp; Inspired by Voyant Tools &nbsp;|&nbsp; 2026
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let excelFile1 = null;
+        let excelFile2 = null;
+        let subtitleFile = null;
+
+        function switchTab(tab, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        function handleSlot(num, e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (num === 1) {
+                excelFile1 = file;
+                document.getElementById('slot1Name').textContent = '✓ ' + file.name;
+                document.getElementById('slot1').classList.add('has-file');
+            } else {
+                excelFile2 = file;
+                document.getElementById('slot2Name').textContent = '✓ ' + file.name;
+                document.getElementById('slot2').classList.add('has-file');
+            }
+        }
+
+        function handleSubtitle(e) {
+            const file = e.target.files[0];
+            if (file) {
+                subtitleFile = file;
+                document.getElementById('subtitleName').textContent = '✓ ' + file.name;
+            }
+        }
+
+        function showLoader(show) {
+            document.getElementById('loader').classList.toggle('show', show);
+        }
+
+        function showToast(msg, type='error') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = `toast show ${type}`;
+            setTimeout(() => t.classList.remove('show'), 3500);
+        }
+
+        async function analyzeText() {
+            const text = document.getElementById('textInput').value.trim();
+            if (!text) { showToast('Please enter some text to analyze'); return; }
+            showLoader(true);
+            const fd = new FormData();
+            fd.append('text', text);
+            try {
+                const r = await fetch('/api/upload', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.ok) { showToast('Ready!', 'success'); setTimeout(() => location.href='/analysis', 400); }
+                else showToast('Error: ' + d.error);
+            } catch(e) { showToast('Error: ' + e.message); }
+            finally { showLoader(false); }
+        }
+
+        async function analyzeExcel() {
+            if (!excelFile1 && !excelFile2) {
+                showToast('Please select at least one Excel file'); return;
+            }
+            showLoader(true);
+            try {
+                const fd = new FormData();
+                if (excelFile1) fd.append('files', excelFile1);
+                if (excelFile2) fd.append('files', excelFile2);
+                const r = await fetch('/api/upload-multi', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.ok) { showToast('Ready!', 'success'); setTimeout(() => location.href='/analysis', 400); }
+                else showToast('Error: ' + d.error);
+            } catch(e) { showToast('Error: ' + e.message); }
+            finally { showLoader(false); }
+        }
+
+        async function analyzeFiles() {
+            if (!subtitleFile) { showToast('Please select a file'); return; }
+            showLoader(true);
+            const fd = new FormData();
+            fd.append('file', subtitleFile);
+            try {
+                const r = await fetch('/api/upload', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.ok) { showToast('Ready!', 'success'); setTimeout(() => location.href='/analysis', 400); }
+                else showToast('Error: ' + d.error);
+            } catch(e) { showToast('Error: ' + e.message); }
+            finally { showLoader(false); }
+        }
+
+        function clearExcel() {
+            excelFile1 = excelFile2 = null;
+            ['excelInput1','excelInput2'].forEach(id => document.getElementById(id).value='');
+            ['slot1Name','slot2Name'].forEach(id => document.getElementById(id).textContent='');
+            ['slot1','slot2'].forEach(id => document.getElementById(id).classList.remove('has-file'));
+        }
+
+        function clearFiles() {
+            subtitleFile = null;
+            document.getElementById('subtitleInput').value = '';
+            document.getElementById('subtitleName').textContent = '';
+        }
+    </script>
+</body>
+</html>

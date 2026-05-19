@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Analysis Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #e8e8e8;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ===== TOP BAR ===== */
+        .topbar {
+            background: #2c3e50;
+            color: white;
+            padding: 0 14px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            font-size: 0.88em;
+        }
+
+        .topbar-logo {
+            font-weight: 700;
+            font-size: 1em;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .topbar-icons {
+            display: flex;
+            gap: 14px;
+            opacity: 0.8;
+            cursor: pointer;
+        }
+
+        .topbar-icons span:hover { opacity: 1; }
+
+        /* ===== MAIN LAYOUT ===== */
+        .workspace {
+            flex: 1;
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 5px;
+            padding: 5px;
+            min-height: 0;
+        }
+
+        /* ===== PANEL ===== */
+        .panel {
+            background: white;
+            border: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .panel-tabs {
+            background: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            padding: 0 6px;
+            height: 30px;
+            flex-shrink: 0;
+            gap: 2px;
+        }
+
+        .ptab {
+            padding: 4px 10px;
+            font-size: 0.78em;
+            font-weight: 600;
+            color: #555;
+            cursor: pointer;
+            border: none;
+            background: none;
+            border-radius: 3px 3px 0 0;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+
+        .ptab.active {
+            background: white;
+            color: #1a5276;
+            border: 1px solid #ccc;
+            border-bottom: 1px solid white;
+            margin-bottom: -1px;
+        }
+
+        .ptab:hover:not(.active) { background: #e0e0e0; }
+
+        .ptab-icon { font-size: 1em; }
+
+        .ptab-help {
+            margin-left: auto;
+            color: #999;
+            font-size: 0.85em;
+            cursor: pointer;
+        }
+
+        .panel-body {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .panel-view {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .panel-view.active { display: block; }
+
+        /* ===== WORD CLOUD ===== */
+        #wordCloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            min-height: 120px;
+        }
+
+        .word-item {
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-weight: 700;
+            transition: transform 0.15s, opacity 0.15s;
+            color: white;
+            white-space: nowrap;
+        }
+
+        .word-item:hover { transform: scale(1.18); opacity: 0.9; }
+        .word-item.selected { outline: 2px solid #f39c12; outline-offset: 1px; }
+
+        /* ===== READER ===== */
+        #readerContent {
+            font-size: 0.86em;
+            line-height: 1.75;
+            color: #333;
+            padding: 10px 12px;
+        }
+
+        #readerContent strong { color: #1a5276; }
+
+        .reader-title {
+            font-weight: 700;
+            font-size: 0.95em;
+            color: #1a5276;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .reader-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 6px 8px;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+            flex-shrink: 0;
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .reader-nav button {
+            padding: 3px 10px;
+            font-size: 0.85em;
+            background: #e8e8e8;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+            color: #333;
+        }
+
+        .reader-nav button:hover { background: #d0d0d0; }
+        .reader-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ===== TRENDS CHART ===== */
+        .chart-wrap {
+            position: relative;
+            height: calc(100% - 10px);
+            padding: 6px;
+        }
+
+        /* ===== SUMMARY ===== */
+        .summary-corpus {
+            font-size: 0.82em;
+            color: #444;
+            line-height: 1.9;
+            padding: 4px 2px;
+        }
+
+        .summary-corpus .s-label { color: #888; }
+
+        .top-words-list {
+            margin-top: 10px;
+            font-size: 0.82em;
+        }
+
+        .top-words-list .tw-item {
+            display: inline-block;
+            margin-right: 4px;
+            cursor: pointer;
+            color: #1a5276;
+        }
+
+        .tw-count { color: #999; font-size: 0.88em; }
+
+        /* ===== CONTEXTS / COLLOCATES ===== */
+        .ctx-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.78em;
+        }
+
+        .ctx-table th {
+            background: #f5f5f5;
+            padding: 5px 7px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            color: #666;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .ctx-table td {
+            padding: 5px 7px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #444;
+        }
+
+        .ctx-table tr:hover td { background: #fafafa; }
+
+        .term-highlight {
+            background: #ffeaa7;
+            font-weight: 700;
+            padding: 1px 3px;
+            border-radius: 2px;
+            color: #333;
+        }
+
+        .coll-bar-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+            font-size: 0.8em;
+        }
+
+        .coll-word { min-width: 80px; color: #1a5276; cursor: pointer; font-weight: 600; }
+        .coll-bar-bg { flex: 1; background: #eee; border-radius: 2px; height: 14px; }
+        .coll-bar-fill { background: linear-gradient(90deg, #2980b9, #1a5276); height: 100%; border-radius: 2px; }
+        .coll-freq { min-width: 28px; text-align: right; color: #999; }
+
+        /* ===== SEARCH TOOLBAR ===== */
+        .bottom-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+            flex-shrink: 0;
+            height: 32px;
+        }
+
+        .bottom-bar input {
+            padding: 3px 7px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 0.8em;
+            width: 120px;
+        }
+
+        .bottom-bar button {
+            padding: 3px 8px;
+            font-size: 0.78em;
+            background: #2980b9;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .bottom-bar button:hover { background: #1a5276; }
+
+        .bottom-bar .lbl { font-size: 0.78em; color: #888; }
+
+        /* ===== TERMS panel (simple frequency list) ===== */
+        .terms-list {
+            font-size: 0.82em;
+        }
+
+        .terms-list .t-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 6px;
+            border-bottom: 1px solid #f5f5f5;
+            cursor: pointer;
+        }
+
+        .terms-list .t-row:hover { background: #f5f5f5; }
+        .terms-list .t-word { color: #1a5276; font-weight: 600; }
+        .terms-list .t-cnt { color: #999; }
+
+        /* ===== LOADING ===== */
+        .loading-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            flex-direction: column;
+            gap: 10px;
+            color: #aaa;
+            font-size: 0.85em;
+        }
+
+        .spinner {
+            border: 2px solid #eee;
+            border-top: 2px solid #2980b9;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+
+        /* ===== TOAST ===== */
+        .toast {
+            position: fixed;
+            bottom: 18px;
+            right: 18px;
+            background: white;
+            padding: 10px 16px;
+            border-radius: 4px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 999;
+            font-size: 0.85em;
+        }
+
+        .toast.show { display: block; }
+        .toast.error { border-left: 4px solid #c0392b; color: #c0392b; }
+        .toast.success { border-left: 4px solid #27ae60; color: #27ae60; }
+
+        /* ===== READER PANEL special layout ===== */
+        .reader-panel-body {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .reader-scroll {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        /* Trends legend chips */
+        .trend-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 4px 8px;
+            border-bottom: 1px solid #eee;
+            flex-shrink: 0;
+        }
+
+        .trend-chip {
+            font-size: 0.75em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+    <div class="topbar-logo">
+        🦉 Text Analysis Dashboard
+    </div>
+    <div class="topbar-icons">
+        <span onclick="location.href='/'" title="Home">🏠</span>
+        <span onclick="downloadReport()" title="Export">📤</span>
+        <span onclick="location.href='/'" title="New">✚</span>
+        <span title="Fullscreen">⛶</span>
+        <span title="Help">?</span>
+    </div>
+</div>
+
+<!-- 3×2 WORKSPACE GRID -->
+<div class="workspace">
+
+    <!-- 1. CIRRUS / WORD CLOUD (top-left) -->
+    <div class="panel">
+        <div class="panel-tabs">
+            <button class="ptab active ptab-cloud" onclick="switchPanelTab(this, 'cloudView')">
+                <span class="ptab-icon">👁</span> Cirrus
+            </button>
+            <button class="ptab" onclick="switchPanelTab(this, 'termsView')">
+                <span class="ptab-icon">≡</span> Terms
+            </button>
+            <span class="ptab-help">?</span>
+        </div>
+        <div class="panel-body">
+            <div class="panel-view active" id="cloudView">
+                <div id="wordCloud">
+                    <div class="loading-wrap"><div class="spinner"></div><span>Loading…</span></div>
+                </div>
+            </div>
+            <div class="panel-view" id="termsView">
+                <div class="terms-list" id="termsList">
+                    <div class="loading-wrap"><div class="spinner"></div></div>
+                </div>
+            </div>
+        </div>
+        <div class="bottom-bar">
+            <span class="lbl">Terms:</span>
+            <input type="range" min="10" max="100" value="30" id="cloudSlider"
+                   oninput="renderWordCloud(+this.value)" style="width:80px; accent-color:#2980b9;">
+        </div>
+    </div>
+
+    <!-- 2. READER (top-middle) -->
+    <div class="panel" style="display:flex; flex-direction:column;">
+        <div class="panel-tabs">
+            <button class="ptab active" onclick="switchPanelTab(this, 'readerView')">
+                <span class="ptab-icon">📄</span> Reader
+            </button>
+            <button class="ptab" onclick="switchPanelTab(this, 'termsBerryView')">
+                <span class="ptab-icon">🫧</span> TermsBerry
+            </button>
+            <span class="ptab-help">?</span>
+        </div>
+        <div class="panel-body">
+            <div class="panel-view active reader-panel-body" id="readerView" style="display:flex;">
+                <div class="reader-scroll" id="readerScroll">
+                    <div id="readerContent">
+                        <div class="loading-wrap"><div class="spinner"></div><span>Loading…</span></div>
+                    </div>
+                </div>
+                <div class="reader-nav" id="readerNav" style="display:none;">
+                    <button id="prevPage" onclick="changePage(-1)" disabled>◀</button>
+                    <span id="pageInfo">Page 1 / 1</span>
+                    <button id="nextPage" onclick="changePage(1)">▶</button>
+                </div>
+            </div>
+            <div class="panel-view" id="termsBerryView">
+                <div style="padding:12px; font-size:0.82em; color:#888; text-align:center; margin-top:30px;">
+                    🫧 TermsBerry shows terms as interactive bubbles.<br>
+                    <span style="color:#1a5276; margin-top:8px; display:block;">Click a word in the Cirrus cloud to highlight it here.</span>
+                    <div id="termsberryBubbles" style="margin-top:16px; display:flex; flex-wrap:wrap; gap:6px; justify-content:center;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. TRENDS (top-right) -->
+    <div class="panel" style="display:flex; flex-direction:column;">
+        <div class="panel-tabs">
+            <button class="ptab active" onclick="switchPanelTab(this, 'trendsView')">
+                <span class="ptab-icon">📈</span> Trends
+            </button>
+            <button class="ptab" onclick="switchPanelTab(this, 'docTermsView')">
+                <span class="ptab-icon">≡</span> Document Terms
+            </button>
+            <span class="ptab-help">?</span>
+        </div>
+        <div class="trend-chips" id="trendChips"></div>
+        <div class="panel-body">
+            <div class="panel-view active" id="trendsView" style="display:flex; align-items:stretch;">
+                <div style="width:100%; padding:6px; position:relative;">
+                    <canvas id="trendsChart"></canvas>
+                </div>
+            </div>
+            <div class="panel-view" id="docTermsView">
+                <div class="terms-list" id="docTermsList"></div>
+            </div>
+        </div>
+        <div class="bottom-bar">
+            <input type="text" id="trendSearch" placeholder="Add term…" style="width:100px;">
+            <button onclick="addTrendTerm()">+</button>
+            <button onclick="resetTrends()" style="background:#95a5a6;">Reset</button>
+        </div>
+    </div>
+
+    <!-- 4. SUMMARY (bottom-left) -->
+    <div class="panel">
+        <div class="panel-tabs">
+            <button class="ptab active" onclick="switchPanelTab(this, 'summaryView')">
+                <span class="ptab-icon">📋</span> Summary
+            </button>
+            <button class="ptab" onclick="switchPanelTab(this, 'documentsView')">
+                <span class="ptab-icon">📂</span> Documents
+            </button>
+            <span class="ptab-help">?</span>
+        </div>
+        <div class="panel-body">
+            <div class="panel-view active" id="summaryView">
+                <div class="summary-corpus" id="summaryContent">
+                    <div class="loading-wrap"><div class="spinner"></div></div>
+                </div>
+            </div>
+            <div class="panel-view" id="documentsView">
+                <div class="summary-corpus" id="documentsContent" style="padding:8px;">
+                    Loading…
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. CONTEXTS / COLLOCATES (bottom-middle) -->
+    <div class="panel">
+        <div class="panel-tabs">
+            <button class="ptab active" onclick="switchPanelTab(this, 'contextsView')">
+                <span class="ptab-icon">🔍</span> Contexts
+            </button>
+            <button class="ptab" onclick="switchPanelTab(this, 'collocatesView')">
+                <span class="ptab-icon">🔗</span> Collocates
+            </button>
+            <span class="ptab-help">?</span>
+        </div>
+        <div class="panel-body">
+            <div class="panel-view active" id="contextsView">
+                <div id="contextsContent">
+                    <div class="loading-wrap"><div class="spinner"></div><span>Select a word…</span></div>
+                </div>
+            </div>
+            <div class="panel-view" id="collocatesView">
+                <div id="collocatesContent">
+                    <div class="loading-wrap"><span style="color:#aaa; font-size:0.85em;">Select a word to see collocates</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="bottom-bar">
+            <input type="text" id="ctxSearchInput" placeholder="Search term…" style="width:110px;">
+            <span class="lbl" id="ctxCount">0 context</span>
+            <button onclick="searchContext()">Search</button>
+        </div>
+    </div>
+
+    <!-- 6. BUBBLELINES / phrases (bottom-right) -->
+    <div class="panel">
+        <div class="panel-tabs">
+            <button class="ptab active" onclick="switchPanelTab(this, 'bubblesView')">
+                <span class="ptab-icon">〰</span> Bubblelines
+            </button>
+            <button class="ptab" onclick="switchPanelTab(this, 'phrasesView')">
+                <span class="ptab-icon">📝</span> Phrases
+            </button>
+            <span class="ptab-help">?</span>
+        </div>
+        <div class="panel-body">
+            <div class="panel-view active" id="bubblesView">
+                <div id="bubblelinesContent" style="padding:8px;">
+                    <div class="loading-wrap"><div class="spinner"></div><span>Loading…</span></div>
+                </div>
+            </div>
+            <div class="panel-view" id="phrasesView">
+                <div id="phrasesContent" style="padding:8px;">
+                    <div class="loading-wrap"><span style="color:#aaa; font-size:0.85em;">Phrase analysis…</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- end workspace -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let allWords = {};           // word → freq
+let selectedWord = null;
+let trendsChart = null;
+let trendTerms = [];
+let readerPage = 1;
+let readerTotalPages = 1;
+
+const PALETTE = [
+    '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
+    '#3498db','#9b59b6','#e91e63','#00bcd4','#ff5722',
+    '#8bc34a','#ff9800','#673ab7','#009688','#f44336',
+    '#2196f3','#4caf50','#ff4081','#00acc1','#7c4dff'
+];
+
+function wordColor(i) { return PALETTE[i % PALETTE.length]; }
+
+// ============================================================
+// PANEL TAB SWITCHING
+// ============================================================
+function switchPanelTab(btn, viewId) {
+    const panel = btn.closest('.panel');
+    panel.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
+    panel.querySelectorAll('.panel-view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    const view = panel.querySelector('#' + viewId);
+    if (view) {
+        view.classList.add('active');
+        view.style.display = '';
+    }
+}
+
+// ============================================================
+// WORD CLOUD
+// ============================================================
+function renderWordCloud(limit = 30) {
+    const cloud = document.getElementById('wordCloud');
+    const entries = Object.entries(allWords).slice(0, limit);
+    if (!entries.length) {
+        cloud.innerHTML = '<div class="loading-wrap"><span>No data</span></div>';
+        return;
+    }
+    const maxF = Math.max(...entries.map(e => e[1]));
+    const minF = Math.min(...entries.map(e => e[1]));
+    const range = maxF - minF || 1;
+
+    cloud.innerHTML = entries.map(([word, freq], i) => {
+        const size = 0.75 + ((freq - minF) / range) * 2.2;
+        const color = wordColor(i);
+        const sel = selectedWord === word ? 'selected' : '';
+        return `<span class="word-item ${sel}"
+            style="font-size:${size.toFixed(2)}em; background:${color};"
+            onclick="selectWord('${word}')"
+            title="${word}: ${freq}">${word}</span>`;
+    }).join('');
+}
+
+// Terms list
+function renderTermsList() {
+    const list = document.getElementById('termsList');
+    const entries = Object.entries(allWords).slice(0, 200);
+    list.innerHTML = entries.map(([w, f], i) =>
+        `<div class="t-row" onclick="selectWord('${w}')">
+            <span class="t-word" style="color:${wordColor(i)}">${w}</span>
+            <span class="t-cnt">${f}</span>
+        </div>`
+    ).join('');
+}
+
+// ============================================================
+// WORD SELECTION
+// ============================================================
+function selectWord(word) {
+    selectedWord = word;
+    document.querySelectorAll('.word-item').forEach(el => {
+        el.classList.toggle('selected', el.textContent.trim() === word);
+    });
+    loadContexts(word);
+    loadCollocates(word);
+    addTrendTermDirect(word);
+    updateTermsBerry(word);
+}
+
+// ============================================================
+// READER
+// ============================================================
+async function loadReader(page = 1) {
+    try {
+        const r = await fetch(`/api/reader?page=${page}&per_page=1200`);
+        const d = await r.json();
+        readerPage = d.page;
+        readerTotalPages = d.total_pages;
+
+        const content = document.getElementById('readerContent');
+        if (!d.text) {
+            content.innerHTML = '<div class="loading-wrap"><span style="color:#aaa">No text available</span></div>';
+            return;
+        }
+
+        // Highlight selected word
+        let text = d.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        if (selectedWord) {
+            const re = new RegExp('\\b' + selectedWord.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\b', 'gi');
+            text = text.replace(re, m => `<mark style="background:#ffeaa7; font-weight:700;">${m}</mark>`);
+        }
+
+        content.innerHTML = `<div class="reader-title">${d.page > 1 ? '…continued' : 'Document Text'}</div>
+            <div style="white-space:pre-wrap;">${text}</div>`;
+
+        // Nav
+        const nav = document.getElementById('readerNav');
+        nav.style.display = 'flex';
+        document.getElementById('pageInfo').textContent = `Page ${d.page} / ${d.total_pages}`;
+        document.getElementById('prevPage').disabled = d.page <= 1;
+        document.getElementById('nextPage').disabled = d.page >= d.total_pages;
+    } catch(e) {
+        document.getElementById('readerContent').innerHTML =
+            '<div class="loading-wrap"><span style="color:#c0392b">Error loading text</span></div>';
+    }
+}
+
+function changePage(delta) {
+    loadReader(readerPage + delta);
+}
+
+// ============================================================
+// SUMMARY
+// ============================================================
+async function loadSummary() {
+    try {
+        const r = await fetch('/api/summary');
+        const d = await r.json();
+        if (d.error) return;
+
+        const tw = Object.entries(d.top_words)
+            .map(([w,f], i) => `<span class="tw-item" style="color:${wordColor(i)}" onclick="selectWord('${w}')">${w}</span><span class="tw-count">(${f})</span>`)
+            .join('; ');
+
+        document.getElementById('summaryContent').innerHTML = `
+            <div>This corpus has <strong>1 document</strong> with <strong>${d.total_words.toLocaleString()} total words</strong> and <strong>${d.unique_words.toLocaleString()} unique word forms</strong>.</div>
+            <div><span class="s-label">Vocabulary Density:</span> <strong>${(d.vocab_density * 100).toFixed(1)}%</strong></div>
+            <div><span class="s-label">Average Words Per Sentence:</span> <strong>${d.avg_words_per_sentence}</strong></div>
+            <div><span class="s-label">Number of Sentences:</span> <strong>${d.num_sentences.toLocaleString()}</strong></div>
+            <div class="top-words-list">
+                <div style="color:#888; font-size:0.88em; margin-bottom:4px;">Most frequent words in the corpus:</div>
+                <div>${tw}</div>
+            </div>
+        `;
+
+        document.getElementById('documentsContent').innerHTML = `
+            <div style="font-size:0.85em;">
+                <div style="font-weight:700; color:#1a5276; margin-bottom:6px;">📂 Document</div>
+                <div>Total Words: <strong>${d.total_words.toLocaleString()}</strong></div>
+                <div>Unique Words: <strong>${d.unique_words.toLocaleString()}</strong></div>
+                <div>Vocabulary Density: <strong>${(d.vocab_density * 100).toFixed(1)}%</strong></div>
+            </div>
+        `;
+    } catch(e) {}
+}
+
+// ============================================================
+// TRENDS
+// ============================================================
+async function loadTrends(terms) {
+    if (!terms || !terms.length) terms = Object.keys(allWords).slice(0, 5);
+    if (!terms.length) return;
+
+    trendTerms = terms;
+    renderTrendChips();
+
+    let url = '/api/trends?' + terms.map(t => 'term=' + encodeURIComponent(t)).join('&');
+    try {
+        const r = await fetch(url);
+        const data = await r.json();
+        if (!Object.keys(data).length) return;
+
+        const ctx = document.getElementById('trendsChart');
+        if (trendsChart) trendsChart.destroy();
+
+        const datasets = Object.entries(data).map(([term, vals], i) => ({
+            label: term,
+            data: vals,
+            borderColor: wordColor(i),
+            backgroundColor: wordColor(i) + '22',
+            fill: false,
+            tension: 0.35,
+            borderWidth: 2.5,
+            pointBackgroundColor: wordColor(i),
+            pointRadius: 4
+        }));
+
+        trendsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array.from({length: 10}, (_, i) => i + 1),
+                datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Document Segments', font: { size: 10 }, color: '#888' },
+                        ticks: { font: { size: 9 } }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Relative Frequency', font: { size: 10 }, color: '#888' },
+                        ticks: { font: { size: 9 } }
+                    }
+                }
+            }
+        });
+
+        renderDocTermsList(data);
+    } catch(e) {}
+}
+
+function renderTrendChips() {
+    const chips = document.getElementById('trendChips');
+    chips.innerHTML = trendTerms.map((t, i) =>
+        `<span class="trend-chip" style="background:${wordColor(i)}" onclick="removeTrendTerm('${t}')">${t} ×</span>`
+    ).join('');
+}
+
+function renderDocTermsList(data) {
+    const el = document.getElementById('docTermsList');
+    el.innerHTML = '<div class="terms-list">' +
+        Object.entries(data).map(([w, vals], i) => {
+            const avg = (vals.reduce((a,b)=>a+b,0)/vals.length*1000).toFixed(2);
+            return `<div class="t-row"><span class="t-word" style="color:${wordColor(i)}">${w}</span><span class="t-cnt">${avg}‰</span></div>`;
+        }).join('') +
+        '</div>';
+}
+
+function addTrendTerm() {
+    const inp = document.getElementById('trendSearch');
+    const term = inp.value.trim().toLowerCase();
+    if (term && !trendTerms.includes(term)) {
+        trendTerms.push(term);
+        loadTrends(trendTerms);
+    }
+    inp.value = '';
+}
+
+function addTrendTermDirect(word) {
+    if (!trendTerms.includes(word)) {
+        if (trendTerms.length >= 6) trendTerms.shift();
+        trendTerms.push(word);
+        loadTrends(trendTerms);
+    }
+}
+
+function removeTrendTerm(term) {
+    trendTerms = trendTerms.filter(t => t !== term);
+    if (!trendTerms.length) trendTerms = Object.keys(allWords).slice(0, 5);
+    loadTrends(trendTerms);
+}
+
+function resetTrends() {
+    trendTerms = Object.keys(allWords).slice(0, 5);
+    loadTrends(trendTerms);
+}
+
+// ============================================================
+// CONTEXTS
+// ============================================================
+async function loadContexts(word) {
+    if (!word) return;
+    const r = await fetch('/api/contexts?term=' + encodeURIComponent(word));
+    const data = await r.json();
+
+    document.getElementById('ctxCount').textContent = data.length + ' context';
+    document.getElementById('ctxSearchInput').value = word;
+
+    if (!data.length) {
+        document.getElementById('contextsContent').innerHTML =
+            '<div class="loading-wrap"><span style="color:#aaa">No contexts found for "' + word + '"</span></div>';
+        return;
+    }
+
+    document.getElementById('contextsContent').innerHTML =
+        '<table class="ctx-table"><thead><tr><th>Document</th><th>Left</th><th>Term</th><th>Right</th></tr></thead><tbody>' +
+        data.slice(0, 50).map(c =>
+            `<tr><td style="color:#888; font-size:0.85em;">Doc.</td>
+             <td style="text-align:right; color:#555">${c.left}</td>
+             <td><span class="term-highlight">${c.term}</span></td>
+             <td style="color:#555">${c.right}</td></tr>`
+        ).join('') +
+        '</tbody></table>';
+}
+
+function searchContext() {
+    const w = document.getElementById('ctxSearchInput').value.trim().toLowerCase();
+    if (w) { selectWord(w); loadContexts(w); }
+}
+
+// ============================================================
+// COLLOCATES
+// ============================================================
+async function loadCollocates(word) {
+    if (!word) return;
+    const r = await fetch('/api/collocates?term=' + encodeURIComponent(word));
+    const data = await r.json();
+
+    const entries = Object.entries(data);
+    if (!entries.length) {
+        document.getElementById('collocatesContent').innerHTML =
+            '<div class="loading-wrap"><span style="color:#aaa">No collocates found</span></div>';
+        return;
+    }
+
+    const maxF = Math.max(...entries.map(e => e[1]));
+    document.getElementById('collocatesContent').innerHTML =
+        '<div style="padding:6px;">' +
+        entries.map(([w, f], i) => `
+            <div class="coll-bar-row">
+                <span class="coll-word" onclick="selectWord('${w}')">${w}</span>
+                <div class="coll-bar-bg"><div class="coll-bar-fill" style="width:${(f/maxF*100).toFixed(0)}%"></div></div>
+                <span class="coll-freq">${f}</span>
+            </div>
+        `).join('') +
+        '</div>';
+}
+
+// ============================================================
+// BUBBLELINES
+// ============================================================
+async function renderBubblelines() {
+    const top5 = Object.keys(allWords).slice(0, 5);
+    const r = await fetch('/api/trends?' + top5.map(t => 'term=' + encodeURIComponent(t)).join('&'));
+    const data = await r.json();
+    const el = document.getElementById('bubblelinesContent');
+
+    if (!Object.keys(data).length) { el.innerHTML = '<div class="loading-wrap"><span>No data</span></div>'; return; }
+
+    el.innerHTML = Object.entries(data).map(([term, vals], ti) => {
+        const max = Math.max(...vals, 0.0001);
+        const bubbles = vals.map((v, i) => {
+            const r = Math.max(4, Math.min(18, (v / max) * 18));
+            const color = wordColor(ti);
+            return `<svg width="${r*2+4}" height="34" style="display:inline-block; vertical-align:middle;">
+                <circle cx="${r+2}" cy="17" r="${r}" fill="${color}" opacity="0.75"/>
+            </svg>`;
+        }).join('');
+        return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+            <span style="min-width:70px; font-size:0.78em; font-weight:700; color:${wordColor(ti)}">${term}</span>
+            <div style="display:flex; align-items:center;">${bubbles}</div>
+        </div>`;
+    }).join('');
+}
+
+// ============================================================
+// TERMBERRY
+// ============================================================
+function updateTermsBerry(word) {
+    const el = document.getElementById('termsberryBubbles');
+    const entries = Object.entries(allWords).slice(0, 30);
+    el.innerHTML = entries.map(([w, f], i) => {
+        const size = 28 + (f / (Object.values(allWords)[0] || 1)) * 36;
+        const color = wordColor(i);
+        const sel = w === word ? '3px solid #f39c12' : 'none';
+        return `<span onclick="selectWord('${w}')" title="${w}: ${f}"
+            style="display:inline-flex; align-items:center; justify-content:center;
+                   width:${size}px; height:${size}px; border-radius:50%;
+                   background:${color}; color:white; font-size:${Math.max(9, size*0.28)}px;
+                   font-weight:700; cursor:pointer; outline:${sel}; margin:2px;">${w}</span>`;
+    }).join('');
+}
+
+// ============================================================
+// TOAST / UTIL
+// ============================================================
+function showToast(msg, type='error') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast show ${type}`;
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function downloadReport() {
+    showToast('Report download coming soon!', 'success');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+    try {
+        // Fetch word cloud data
+        const r1 = await fetch('/api/word-cloud?limit=200');
+        allWords = await r1.json();
+
+        if (!Object.keys(allWords).length) {
+            showToast('No data loaded. Please go back and upload a file.');
+            return;
+        }
+
+        renderWordCloud(30);
+        renderTermsList();
+        loadSummary();
+        loadReader(1);
+        loadTrends(Object.keys(allWords).slice(0, 5));
+        renderBubblelines();
+        updateTermsBerry(null);
+
+        // Auto-select top word for contexts
+        const topWord = Object.keys(allWords)[0];
+        if (topWord) {
+            selectWord(topWord);
+        }
+
+    } catch(e) {
+        showToast('Error initializing dashboard: ' + e.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+// Keypress for trend search
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.activeElement.id === 'trendSearch') addTrendTerm();
+    if (e.key === 'Enter' && document.activeElement.id === 'ctxSearchInput') searchContext();
+});
+</script>
+</body>
+</html>
