@@ -616,10 +616,28 @@ BLOOM_COLORS = {
     'QL': '#95a5a6', 'QO': '#f39c12', 'QC': '#d35400',
 }
 SUPPORT_WORDS = [
-    'маш сайн', 'зөв байна', 'зүйтэй', 'болж байна', 'сайн байна',
-    'маш зөв', 'яг зөв', 'яг тийм', 'зөв', 'тийм ээ', 'болсон',
-    'ойлгосон', 'сайхан', 'баярлалаа',
+    'маш сайн',      # very good — unambiguous praise
+    'зөв байна',     # that's correct
+    'маш зөв',       # very correct
+    'яг зөв',        # exactly right
+    'яг тийм',       # exactly so
+    'зүйтэй',        # appropriate / right
+    'болж байна',    # going well / that works
+    'сайн байна',    # good
+    'зөв ойлгосон',  # understood correctly
+    'ойлгосон',      # understood
+    'сайхан байна',  # how nice
+    'баярлалаа',     # thank you (teacher acknowledging answer)
+    'гоё байна',     # great / nice
+    'тийм л дээ',    # yes indeed
+    'тийм шүү',      # yes indeed
+    'үнэн',          # true / correct
+    'оновчтой',      # accurate / apt
 ]
+# NOTE: 'зөв' alone removed — too broad (catches "зөв суугаарай" = sit properly).
+#       'тийм ээ' removed — also appears inside teacher questions, not just praise.
+#       'болсон' removed — "болсон уу?" is a question; ambiguous without context.
+#       'сайхан' removed — can be used in non-academic contexts.
 Q_TYPES = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'QL', 'QO', 'QC']
 
 
