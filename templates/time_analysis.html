@@ -175,6 +175,11 @@ const BLOOM_COLORS = {
   Q5:'#e74c3c',Q6:'#1abc9c',QL:'#95a5a6',QO:'#f39c12',QC:'#d35400'
 };
 const Q_TYPES = ['Q1','Q2','Q3','Q4','Q5','Q6','QL','QO','QC'];
+// 50_analysis uses numeric codes '1' (closed/lower) and '2' (open/higher)
+const ALL_Q_TYPES  = ['1','2',...Q_TYPES];
+const Q_LABELS     = {'1':'Хаалттай (1)','2':'Нээлттэй (2)'};
+const Q_COLORS     = {'1':'#5dade2','2':'#f0a500',...BLOOM_COLORS};
+const Q_CODE_DISP  = {'1':'Хаалттай','2':'Нээлттэй'}; // short label for table cells
 
 let charts = {};
 
@@ -253,14 +258,14 @@ function renderSegPage(sum, segs){
     <div class="metric"><div class="val">${sT}</div><div class="lbl">Сурагчийн тээлт</div></div>
     <div class="metric"><div class="val">${qTotal}</div><div class="lbl">Нийт Q код</div></div>`;
 
-  // Stacked bar — segments
+  // Stacked bar — segments (includes '1'/'2' codes from 50_analysis)
   const labels = Array.from({length:10},(_,i)=>'Сег '+(i+1));
-  const datasets = Q_TYPES
+  const datasets = ALL_Q_TYPES
     .filter(qt => sum.seg_q.some(s=>s[qt]>0))
     .map(qt=>({
-      label: qt,
-      data: sum.seg_q.map(s=>s[qt]),
-      backgroundColor: BLOOM_COLORS[qt]||'#999',
+      label: Q_LABELS[qt]||qt,
+      data: sum.seg_q.map(s=>s[qt]||0),
+      backgroundColor: Q_COLORS[qt]||'#999',
     }));
 
   if(charts.seg) charts.seg.destroy();
@@ -278,7 +283,7 @@ function renderSegPage(sum, segs){
       <td><span class="badge badge-${r.speaker}">${r.speaker}</span></td>
       <td>${fmtSec(r.start)}</td>
       <td>${fmtSec(r.end)}</td>
-      <td>${r.q_codes.join(', ')||'—'}</td>
+      <td>${r.q_codes.map(c=>Q_CODE_DISP[c]||c).join(', ')||'—'}</td>
       <td style="color:#555">${r.text}</td>
     </tr>`).join('');
 }

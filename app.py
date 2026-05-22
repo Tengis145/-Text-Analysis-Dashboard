@@ -764,8 +764,9 @@ def api_teacher_time():
             think = None
             if k < len(rows) and rows[k]['speaker'] == 'T':
                 t2 = rows[k]
-                if s_row['end'] is not None and t2['start'] is not None:
-                    gap = t2['start'] - s_row['end']
+                last_s = rows[k - 1]  # last consecutive student row before T2
+                if last_s['end'] is not None and t2['start'] is not None:
+                    gap = t2['start'] - last_s['end']
                     think = round(gap, 1) if gap >= 0 else None
             t_ask = row['duration']
             s_ans = s_row['duration']
