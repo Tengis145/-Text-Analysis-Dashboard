@@ -122,25 +122,28 @@ tr:hover td{background:#fafcff;}
   </div>
 </div>
 
-<!-- ── PAGE 2: Teacher support ──────────────────────────────── -->
+<!-- ── PAGE 2: Teacher support + Extension ─────────────────── -->
 <div class="page" id="page2">
   <div class="metrics" id="sup-metrics"><div class="spinner"></div></div>
   <div class="chart-row">
-    <div class="card" style="max-width:340px;">
-      <h3>Дэмжлэгийн харьцаа</h3>
-      <canvas id="supPie" height="200"></canvas>
+    <div class="card" style="max-width:360px;">
+      <h3>Дэмжлэг × Дэлгэрэлт (4 ангилал)</h3>
+      <canvas id="supPie" height="220"></canvas>
     </div>
     <div class="card" style="flex:1;">
-      <h3>Q код тус бүрийн дэмжлэг</h3>
-      <canvas id="supBar" height="200"></canvas>
+      <h3>Q код тус бүрийн дэмжлэг ба дэлгэрэлт</h3>
+      <canvas id="supBar" height="220"></canvas>
     </div>
   </div>
   <div class="card">
     <h3>T → S → T дарааллын жагсаалт</h3>
     <div class="tbl-wrap">
       <table id="supTable">
-        <thead><tr><th>#</th><th>Q код</th><th>Багшийн асуулт</th>
-          <th>Сурагчийн хариулт</th><th>Багшийн дараагийн яриа</th><th>Дэмжлэг</th></tr></thead>
+        <thead><tr>
+          <th>#</th><th>Q код</th><th>Багшийн асуулт</th>
+          <th>Сурагчийн хариулт</th><th>Багшийн дараагийн яриа</th>
+          <th>Дэмжлэг</th><th>Дэлгэрэлт</th>
+        </tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -353,32 +356,53 @@ function renderTimePage(sum, records, src){
 }
 
 // ── PAGE 2 ─────────────────────────────────────────────────────
+// 2×2 classification labels & colors
+const CAT = {
+  'DD': {label:'Дэмжиж дэлгэрүүлсэн',  color:'#27ae60'},  // supported + extended
+  'DC': {label:'Дэмжиж дуусгасан',       color:'#a9dfbf'},  // supported + closed
+  'ND': {label:'Дэмжилгүй дэлгэрүүлсэн',color:'#f39c12'},  // not supported + extended
+  'NC': {label:'Дэмжилгүй дуусгасан',    color:'#e74c3c'},  // not supported + closed
+};
+function catKey(r){ return (r.support==='Дэмжсэн'?'D':'N') + (r.extended?'D':'C'); }
+
 function renderSupportPage(data){
-  const yes = data.filter(r=>r.support==='Дэмжсэн').length;
-  const no  = data.length - yes;
-  const pct = data.length ? Math.round(yes/data.length*100) : 0;
+  const n = data.length;
+  const sup  = data.filter(r=>r.support==='Дэмжсэн').length;
+  const ext  = data.filter(r=>r.extended).length;
+  const supExt = data.filter(r=>r.support==='Дэмжсэн' && r.extended).length;
+  const pctSup = n ? Math.round(sup/n*100) : 0;
+  const pctExt = n ? Math.round(ext/n*100) : 0;
 
   document.getElementById('sup-metrics').innerHTML = `
-    <div class="metric"><div class="val">${data.length}</div><div class="lbl">Нийт T→S→T хос</div></div>
-    <div class="metric"><div class="val" style="color:#2ecc71">${yes}</div><div class="lbl">Дэмжсэн</div></div>
-    <div class="metric"><div class="val" style="color:#e74c3c">${no}</div><div class="lbl">Дэмжээгүй</div></div>
-    <div class="metric"><div class="val">${pct}%</div><div class="lbl">Дэмжлэгийн хувь</div></div>`;
+    <div class="metric"><div class="val">${n}</div><div class="lbl">Нийт T→S→T хос</div></div>
+    <div class="metric"><div class="val" style="color:#27ae60">${sup}</div><div class="lbl">Дэмжсэн (${pctSup}%)</div></div>
+    <div class="metric"><div class="val" style="color:#f39c12">${ext}</div><div class="lbl">Дэлгэрүүлсэн (${pctExt}%)</div></div>
+    <div class="metric"><div class="val" style="color:#2980b9">${supExt}</div><div class="lbl">Дэмжиж дэлгэрүүлсэн</div></div>`;
 
-  // Pie
+  // Pie — 4-way classification
+  const catCounts = {};
+  data.forEach(r=>{ const k=catKey(r); catCounts[k]=(catCounts[k]||0)+1; });
+  const catKeys   = Object.keys(CAT);
   if(charts.sPie) charts.sPie.destroy();
   charts.sPie = new Chart(document.getElementById('supPie'),{
     type:'pie',
-    data:{labels:['Дэмжсэн','Дэмжээгүй'],
-          datasets:[{data:[yes,no],backgroundColor:['#2ecc71','#e74c3c']}]},
-    options:{plugins:{legend:{position:'bottom'}}}
+    data:{
+      labels: catKeys.map(k=>CAT[k].label),
+      datasets:[{
+        data: catKeys.map(k=>catCounts[k]||0),
+        backgroundColor: catKeys.map(k=>CAT[k].color),
+      }]
+    },
+    options:{plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
   });
 
-  // Q code breakdown bar
+  // Stacked bar — Q code × 4-way classification
   const qMap = {};
   data.forEach(r=>{
+    const ck = catKey(r);
     r.q_codes.split(', ').filter(Boolean).forEach(q=>{
-      if(!qMap[q]) qMap[q]={d:0,n:0};
-      if(r.support==='Дэмжсэн') qMap[q].d++; else qMap[q].n++;
+      if(!qMap[q]) qMap[q]={DD:0,DC:0,ND:0,NC:0};
+      qMap[q][ck]++;
     });
   });
   const qLabels = Object.keys(qMap);
@@ -387,25 +411,33 @@ function renderSupportPage(data){
     type:'bar',
     data:{
       labels: qLabels,
-      datasets:[
-        {label:'Дэмжсэн', data:qLabels.map(k=>qMap[k].d), backgroundColor:'#2ecc71'},
-        {label:'Дэмжээгүй', data:qLabels.map(k=>qMap[k].n), backgroundColor:'#e74c3c'},
-      ]
+      datasets: catKeys.map(k=>({
+        label: CAT[k].label,
+        data: qLabels.map(q=>qMap[q][k]||0),
+        backgroundColor: CAT[k].color,
+      }))
     },
-    options:{responsive:true,plugins:{legend:{position:'bottom'}},
-             scales:{x:{stacked:true},y:{stacked:true}}}
+    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10}}}},
+             scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'Тоо'}}}}
   });
 
-  // Table
+  // Table — add Дэлгэрэлт column
   const tbody = document.querySelector('#supTable tbody');
-  tbody.innerHTML = data.map(r=>`
-    <tr>
+  tbody.innerHTML = data.map(r=>{
+    const ck = catKey(r);
+    const supBadge = `<span class="badge badge-${r.support==='Дэмжсэн'?'D':'N'}">${r.support}</span>`;
+    const extBadge = r.extended
+      ? `<span class="badge" style="background:#f39c12">Дэлгэрсэн</span>`
+      : `<span class="badge" style="background:#bdc3c7;color:#fff">Дуусгасан</span>`;
+    return `<tr style="border-left:3px solid ${CAT[ck].color}">
       <td>${r.q_num}</td><td>${r.q_codes}</td>
       <td style="font-size:0.8em;color:#2c3e50">${r.teacher_q}</td>
       <td style="font-size:0.8em;color:#555">${r.student_ans}</td>
       <td style="font-size:0.8em;color:#555">${r.teacher_followup}</td>
-      <td><span class="badge badge-${r.support==='Дэмжсэн'?'D':'N'}">${r.support}</span></td>
-    </tr>`).join('');
+      <td>${supBadge}</td>
+      <td>${extBadge}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── PAGE 3 ─────────────────────────────────────────────────────

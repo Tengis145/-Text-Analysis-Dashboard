@@ -669,6 +669,16 @@ def _classify_support(text):
     return 'Дэмжсэн' if any(w in t for w in SUPPORT_WORDS) else 'Дэмжээгүй'
 
 
+def _classify_extend(t2_row):
+    """True if teacher's follow-up continues the discussion with further questioning.
+    Detected by: Q codes present in T2 text, or a literal '?' question mark."""
+    if t2_row.get('q_codes'):
+        return True
+    if '?' in str(t2_row.get('text', '')):
+        return True
+    return False
+
+
 def _load_time_rows(sheet_name):
     df_raw = pd.read_excel(F_TIME, sheet_name=sheet_name, header=None)
     rows = []
@@ -816,6 +826,7 @@ def api_time_support():
                 'student_ans': s_row['text'][:80],
                 'teacher_followup': t2['text'][:80],
                 'support': _classify_support(t2['text']),
+                'extended': _classify_extend(t2),
             })
         return jsonify(results)
     except Exception as e:
@@ -965,6 +976,7 @@ def api_analysis_support():
                 'student_ans': s_row['text'][:80],
                 'teacher_followup': t2['text'][:80],
                 'support': _classify_support(t2['text']),
+                'extended': _classify_extend(t2),
             })
         return jsonify(results)
     except Exception as e:
