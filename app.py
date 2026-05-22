@@ -833,6 +833,101 @@ def api_time_support():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/time/question-chain')
+def api_time_question_chain():
+    sheet = request.args.get('sheet', '')
+    try:
+        rows = _load_time_rows(sheet)
+        triplets = []
+        for i, row in enumerate(rows):
+            if not (row['speaker'] == 'T' and row['has_q']):
+                continue
+            j = i + 1
+            while j < len(rows) and rows[j]['speaker'] == 'T':
+                j += 1
+            if j >= len(rows) or rows[j]['speaker'] not in ('S', 'C'):
+                continue
+            s_row = rows[j]
+            k = j + 1
+            while k < len(rows) and rows[k]['speaker'] in ('S', 'C'):
+                k += 1
+            if k >= len(rows) or rows[k]['speaker'] != 'T':
+                continue
+            t2 = rows[k]
+            triplets.append({
+                'id':       len(triplets),
+                't1_idx':   i,
+                't2_idx':   k,
+                'q_num':    i + 1,
+                'q_codes':  ', '.join(row['q_codes']),
+                'teacher_q':      row['text'][:70],
+                'student_ans':    s_row['text'][:70],
+                'teacher_followup': t2['text'][:70],
+                'support':  _classify_support(t2['text']),
+                'extended': _classify_extend(t2),
+            })
+        # Link triplet[i] → triplet[j] when T2 of i IS T1 of j (exact row match)
+        t1_idx_map = {t['t1_idx']: t['id'] for t in triplets}
+        links = []
+        for t in triplets:
+            if t['extended'] and t['t2_idx'] in t1_idx_map:
+                links.append({'source': t['id'], 'target': t1_idx_map[t['t2_idx']]})
+        nodes = [{'id': t['id'], 'q_num': t['q_num'], 'q_codes': t['q_codes'],
+                  'teacher_q': t['teacher_q'], 'student_ans': t['student_ans'],
+                  'teacher_followup': t['teacher_followup'],
+                  'support': t['support'], 'extended': t['extended']} for t in triplets]
+        return jsonify({'nodes': nodes, 'links': links})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/question-chain')
+def api_analysis_question_chain():
+    sheet = request.args.get('sheet', '')
+    try:
+        rows = _load_analysis_rows(sheet)
+        triplets = []
+        for i, row in enumerate(rows):
+            if not (row['speaker'] == 'T' and row['has_q']):
+                continue
+            j = i + 1
+            while j < len(rows) and rows[j]['speaker'] == 'T':
+                j += 1
+            if j >= len(rows) or rows[j]['speaker'] != 'S':
+                continue
+            s_row = rows[j]
+            k = j + 1
+            while k < len(rows) and rows[k]['speaker'] == 'S':
+                k += 1
+            if k >= len(rows) or rows[k]['speaker'] != 'T':
+                continue
+            t2 = rows[k]
+            triplets.append({
+                'id':       len(triplets),
+                't1_idx':   i,
+                't2_idx':   k,
+                'q_num':    i + 1,
+                'q_codes':  ', '.join(row['q_codes']),
+                'teacher_q':      row['text'][:70],
+                'student_ans':    s_row['text'][:70],
+                'teacher_followup': t2['text'][:70],
+                'support':  _classify_support(t2['text']),
+                'extended': _classify_extend(t2),
+            })
+        t1_idx_map = {t['t1_idx']: t['id'] for t in triplets}
+        links = []
+        for t in triplets:
+            if t['extended'] and t['t2_idx'] in t1_idx_map:
+                links.append({'source': t['id'], 'target': t1_idx_map[t['t2_idx']]})
+        nodes = [{'id': t['id'], 'q_num': t['q_num'], 'q_codes': t['q_codes'],
+                  'teacher_q': t['teacher_q'], 'student_ans': t['student_ans'],
+                  'teacher_followup': t['teacher_followup'],
+                  'support': t['support'], 'extended': t['extended']} for t in triplets]
+        return jsonify({'nodes': nodes, 'links': links})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/time/bloom')
 def api_bloom():
     sheet = request.args.get('sheet', '')

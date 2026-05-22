@@ -6,6 +6,7 @@
 <title>Хичээлийн харилцааны шинжилгээ</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3"></script>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#2c3e50;}
@@ -77,6 +78,7 @@ tr:hover td{background:#fafcff;}
   <div class="tab" onclick="switchTab(1)">Багш / Сурагчийн хугацаа</div>
   <div class="tab" onclick="switchTab(2)">Багшийн дэмжлэг</div>
   <div class="tab" onclick="switchTab(3)">Bloom-ын ангилал</div>
+  <div class="tab" onclick="switchTab(4)">Асуултын сүлжээ</div>
 </div>
 
 <!-- ── PAGE 0: Segment & Q count ─────────────────────────────── -->
@@ -172,6 +174,21 @@ tr:hover td{background:#fafcff;}
   </div>
 </div>
 
+<!-- ── PAGE 4: Question network ───────────────────────────────── -->
+<div class="page" id="page4">
+  <div class="card" style="margin-bottom:10px;padding:12px 18px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
+    <span style="font-weight:700;font-size:0.9em;">Тайлбар:</span>
+    <span><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#27ae60;vertical-align:middle;"></span> Дэмжиж дэлгэрүүлсэн</span>
+    <span><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#a9dfbf;vertical-align:middle;"></span> Дэмжиж дуусгасан</span>
+    <span><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#f39c12;vertical-align:middle;"></span> Дэмжилгүй дэлгэрүүлсэн</span>
+    <span><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#e74c3c;vertical-align:middle;"></span> Дэмжилгүй дуусгасан</span>
+    <span style="margin-left:auto;font-size:0.78em;color:#aaa;">Зангилаа чирж болно • Хулганы дугуйгаар томруулна</span>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;position:relative;">
+    <div id="chainGraph" style="width:100%;min-height:560px;position:relative;"></div>
+  </div>
+</div>
+
 <script>
 const BLOOM_COLORS = {
   Q1:'#3498db',Q2:'#2ecc71',Q3:'#e67e22',Q4:'#9b59b6',
@@ -229,24 +246,26 @@ async function loadAll(){
   const base = apiBase();
   const src  = getSource();
 
-  // Fetch summary, segments, support, bloom for both sources
-  const fetches = [
+  const [sumR, segsR, suppR, bloomR, chainR] = await Promise.all([
     fetch(`${base}/summary?sheet=${enc}`),
     fetch(`${base}/segments?sheet=${enc}`),
     fetch(`${base}/support?sheet=${enc}`),
     fetch(`${base}/bloom?sheet=${enc}`),
-  ];
-  // Teacher-time only available for DATA_time
-  if(src === 'time') fetches.push(fetch(`/api/time/teacher-time?sheet=${enc}`));
-
-  const responses = await Promise.all(fetches);
-  const [sum, segs, support, bloom] = await Promise.all(responses.slice(0,4).map(r=>r.json()));
-  const teacherT = src === 'time' ? await responses[4].json() : [];
+    fetch(`${base}/question-chain?sheet=${enc}`),
+  ]);
+  const [sum, segs, support, bloom, chain] = await Promise.all(
+    [sumR, segsR, suppR, bloomR, chainR].map(r => r.json())
+  );
+  let teacherT = [];
+  if(src === 'time'){
+    teacherT = await fetch(`/api/time/teacher-time?sheet=${enc}`).then(r => r.json());
+  }
 
   renderSegPage(sum, segs);
   renderTimePage(sum, teacherT, src);
   renderSupportPage(support);
   renderBloomPage(bloom);
+  renderChainPage(chain);
 }
 
 // ── PAGE 0 ─────────────────────────────────────────────────────
@@ -483,6 +502,119 @@ function renderBloomPage(data){
       <td>${d.label}</td>
       <td><strong>${d.count}</strong> (${total?Math.round(d.count/total*100):0}%)</td>
     </tr>`).join('');
+}
+
+// ── PAGE 4: Question network (D3 force graph) ──────────────────
+const CAT_COL = {DD:'#27ae60', DC:'#a9dfbf', ND:'#f39c12', NC:'#e74c3c'};
+function nodeCat(d){ return (d.support==='Дэмжсэн'?'D':'N') + (d.extended?'D':'C'); }
+
+function renderChainPage(data){
+  const container = document.getElementById('chainGraph');
+  container.innerHTML = '';
+  if(!data || data.error || !data.nodes || !data.nodes.length){
+    container.innerHTML = '<div class="empty" style="padding:60px">T→S→T дараалал олдсонгүй</div>';
+    return;
+  }
+
+  const {nodes, links} = data;
+  const W = container.clientWidth || 900;
+  const H = 560;
+
+  const svg = d3.select(container).append('svg')
+    .attr('width', '100%').attr('height', H)
+    .attr('viewBox', `0 0 ${W} ${H}`)
+    .style('background','#f8fafc');
+
+  // Zoom + pan
+  const g = svg.append('g');
+  svg.call(d3.zoom().scaleExtent([0.3, 3])
+    .on('zoom', e => g.attr('transform', e.transform)));
+
+  // Arrow marker
+  svg.append('defs').append('marker')
+    .attr('id','chain-arrow').attr('viewBox','0 -5 10 10')
+    .attr('refX', 32).attr('refY', 0)
+    .attr('markerWidth', 7).attr('markerHeight', 7)
+    .attr('orient','auto')
+    .append('path').attr('d','M0,-5L10,0L0,5').attr('fill','#3498db');
+
+  // Tooltip
+  const tip = d3.select(container).append('div')
+    .style('position','absolute').style('top','0').style('left','0')
+    .style('background','#fff').style('border','1px solid #ddd')
+    .style('border-radius','8px').style('padding','10px 14px')
+    .style('font-size','0.78em').style('max-width','280px')
+    .style('box-shadow','0 2px 8px #0002').style('pointer-events','none')
+    .style('display','none').style('z-index','50').style('line-height','1.5');
+
+  // Deep copy nodes/links for D3 mutation
+  const simNodes = nodes.map(d => ({...d}));
+  const simLinks = links.map(d => ({source: d.source, target: d.target}));
+
+  // Force: left-to-right flow based on sequence position
+  const sim = d3.forceSimulation(simNodes)
+    .force('link', d3.forceLink(simLinks).id(d => d.id).distance(110).strength(0.9))
+    .force('charge', d3.forceManyBody().strength(-280))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('x', d3.forceX(d => 60 + (d.id / Math.max(nodes.length-1,1)) * (W-120)).strength(0.12))
+    .force('y', d3.forceY(H/2).strength(0.06))
+    .force('collision', d3.forceCollide(30));
+
+  // Links
+  const linkEl = g.append('g').selectAll('line')
+    .data(simLinks).join('line')
+    .attr('stroke','#3498db').attr('stroke-width',2).attr('stroke-opacity',0.6)
+    .attr('marker-end','url(#chain-arrow)');
+
+  // Node groups
+  const nodeEl = g.append('g').selectAll('g')
+    .data(simNodes).join('g')
+    .style('cursor','grab')
+    .call(d3.drag()
+      .on('start', (e,d) => { if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag',  (e,d) => { d.fx=e.x; d.fy=e.y; })
+      .on('end',   (e,d) => { if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
+    .on('mouseover', (event, d) => {
+      const rect = container.getBoundingClientRect();
+      tip.style('display','block')
+        .style('left', (event.clientX - rect.left + 14) + 'px')
+        .style('top',  (event.clientY - rect.top  - 10) + 'px')
+        .html(`<b style="color:${CAT_COL[nodeCat(d)]}">#${d.q_num} ${d.q_codes||'—'}</b><br>
+          <span style="color:#3498db">Багш:</span> ${d.teacher_q}<br>
+          <span style="color:#e67e22">Сурагч:</span> ${d.student_ans}<br>
+          <span style="color:#555">Дараагийн яриа:</span> ${d.teacher_followup}<br>
+          <span class="badge" style="background:${CAT_COL[nodeCat(d)]};font-size:0.85em">
+            ${d.support} · ${d.extended?'Дэлгэрсэн':'Дуусгасан'}
+          </span>`);
+    })
+    .on('mouseout', () => tip.style('display','none'));
+
+  // Circle
+  nodeEl.append('circle')
+    .attr('r', 22)
+    .attr('fill', d => CAT_COL[nodeCat(d)])
+    .attr('stroke', '#fff').attr('stroke-width', 2.5);
+
+  // Primary Q code label
+  nodeEl.append('text')
+    .text(d => (d.q_codes || '?').split(',')[0].trim())
+    .attr('text-anchor','middle').attr('dy','0.35em')
+    .attr('font-size','10px').attr('font-weight','700').attr('fill','#fff')
+    .style('pointer-events','none');
+
+  // Sequence number below circle
+  nodeEl.append('text')
+    .text(d => `#${d.q_num}`)
+    .attr('text-anchor','middle').attr('dy','37px')
+    .attr('font-size','9px').attr('fill','#888')
+    .style('pointer-events','none');
+
+  sim.on('tick', () => {
+    linkEl
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    nodeEl.attr('transform', d => `translate(${Math.max(24,Math.min(W-24,d.x))},${Math.max(24,Math.min(H-24,d.y))})`);
+  });
 }
 
 // ── Boot ───────────────────────────────────────────────────────
