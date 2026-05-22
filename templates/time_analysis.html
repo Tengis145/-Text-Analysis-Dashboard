@@ -295,10 +295,10 @@ function renderTimePage(sum, records, src){
   }
   const tSec = sum.teacher_time, sSec = sum.student_time;
   const ratio = sSec ? (tSec/sSec).toFixed(2) : '—';
-  const avgS = records.length
-    ? (records.reduce((a,r)=>a+(r.student_ans||0),0)/records.length).toFixed(1) : 0;
-  const avgTh = records.length
-    ? (records.reduce((a,r)=>a+(r.teacher_think||0),0)/records.length).toFixed(1) : 0;
+  const validS  = records.filter(r => r.student_ans  != null);
+  const avgS  = validS.length  ? (validS.reduce((a,r)=>a+r.student_ans,0)/validS.length).toFixed(1)  : 0;
+  const validTh = records.filter(r => r.teacher_think != null);
+  const avgTh = validTh.length ? (validTh.reduce((a,r)=>a+r.teacher_think,0)/validTh.length).toFixed(1) : 0;
 
   document.getElementById('time-metrics').innerHTML = `
     <div class="metric"><div class="val">${fmtSec(tSec)}</div><div class="lbl">Багшийн нийт</div></div>
