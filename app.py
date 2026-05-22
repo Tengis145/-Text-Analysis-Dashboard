@@ -88,22 +88,19 @@ def parse_vtt(filepath):
     """Parse VTT subtitle file"""
     if not webvtt:
         return None
+
+    def _vtt_time(time_str):
+        parts = time_str.split(':')
+        return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+
     try:
         vtt = webvtt.read(filepath)
         segments = []
         for cue in vtt:
-            # Parse webvtt time format (HH:MM:SS.mmm)
-            def parse_time(time_str):
-                parts = time_str.split(':')
-                hours = int(parts[0])
-                minutes = int(parts[1])
-                seconds = float(parts[2])
-                return hours * 3600 + minutes * 60 + seconds
-
             segments.append({
-                'start': parse_time(cue.start),
-                'end': parse_time(cue.end),
-                'text': cue.text.replace('\n', ' ')
+                'start': _vtt_time(cue.start),
+                'end':   _vtt_time(cue.end),
+                'text':  cue.text.replace('\n', ' ')
             })
         return segments
     except Exception as e:
@@ -208,10 +205,6 @@ def upload():
     ext = Path(filename).suffix.lower()
     filepath = UPLOAD_FOLDER / filename
 
-    print(f"DEBUG: Original filename: {file.filename}")
-    print(f"DEBUG: Secure filename: {filename}")
-    print(f"DEBUG: Extension: {ext}")
-    print(f"DEBUG: ALLOWED_EXCEL: {ALLOWED_EXCEL}")
 
     try:
         file.save(filepath)
@@ -679,6 +672,60 @@ def _classify_extend(t2_row):
     return False
 
 
+def _build_triplets(rows, s_speakers=None):
+    """Build T→S→T triplet list from a conversation row sequence.
+
+    Each triplet covers: teacher question (T1) → student answer (S) → teacher follow-up (T2).
+    Consecutive T rows before S are skipped; consecutive S rows before T2 are skipped.
+    s_speakers controls which speaker codes count as student (default {'S','C'}).
+
+    Returns a list of dicts. Raw row references are included under 'row', 's_row',
+    'last_s', 't2' so callers can access durations, timestamps, etc.
+    """
+    if s_speakers is None:
+        s_speakers = frozenset({'S', 'C'})
+    triplets = []
+    for i, row in enumerate(rows):
+        if not (row['speaker'] == 'T' and row['has_q']):
+            continue
+        j = i + 1
+        while j < len(rows) and rows[j]['speaker'] == 'T':
+            j += 1
+        if j >= len(rows) or rows[j]['speaker'] not in s_speakers:
+            continue
+        s_row = rows[j]
+        k = j + 1
+        while k < len(rows) and rows[k]['speaker'] in s_speakers:
+            k += 1
+        if k >= len(rows) or rows[k]['speaker'] != 'T':
+            continue
+        t2 = rows[k]
+        triplets.append({
+            'id':       len(triplets),
+            't1_idx':   i,
+            't2_idx':   k,
+            'q_num':    i + 1,
+            'q_codes':  ', '.join(row['q_codes']),
+            'support':  _classify_support(t2['text']),
+            'extended': _classify_extend(t2),
+            'row':    row,
+            's_row':  s_row,
+            'last_s': rows[k - 1],
+            't2':     t2,
+        })
+    return triplets
+
+
+def _chain_links(triplets):
+    """Return [{source, target}] links where T2 of one triplet IS T1 of another."""
+    t1_map = {t['t1_idx']: t['id'] for t in triplets}
+    return [
+        {'source': t['id'], 'target': t1_map[t['t2_idx']]}
+        for t in triplets
+        if t['extended'] and t['t2_idx'] in t1_map
+    ]
+
+
 def _load_time_rows(sheet_name):
     df_raw = pd.read_excel(F_TIME, sheet_name=sheet_name, header=None)
     rows = []
@@ -757,41 +804,25 @@ def api_time_segments():
 def api_teacher_time():
     sheet = request.args.get('sheet', '')
     try:
-        rows = _load_time_rows(sheet)
+        triplets = _build_triplets(_load_time_rows(sheet))
         records = []
-        for i, row in enumerate(rows):
-            if not (row['speaker'] == 'T' and row['has_q']):
-                continue
-            j = i + 1
-            while j < len(rows) and rows[j]['speaker'] == 'T':
-                j += 1
-            if j >= len(rows) or rows[j]['speaker'] not in ('S', 'C'):
-                continue
-            s_row = rows[j]
-            k = j + 1
-            while k < len(rows) and rows[k]['speaker'] in ('S', 'C'):
-                k += 1
+        for t in triplets:
+            t_ask = t['row']['duration']
+            s_ans = t['s_row']['duration']
+            # Clamp invalid durations
+            if t_ask is not None and not (0 < t_ask <= 3600): t_ask = None
+            if s_ans is not None and not (0 < s_ans <= 3600): s_ans = None
             think = None
-            if k < len(rows) and rows[k]['speaker'] == 'T':
-                t2 = rows[k]
-                last_s = rows[k - 1]  # last consecutive student row before T2
-                if last_s['end'] is not None and t2['start'] is not None:
-                    gap = t2['start'] - last_s['end']
-                    think = round(gap, 1) if gap >= 0 else None
-            t_ask = row['duration']
-            s_ans = s_row['duration']
-            # Skip records with clearly invalid (negative or huge) durations
-            if t_ask is not None and t_ask < 0: t_ask = None
-            if s_ans is not None and s_ans < 0: s_ans = None
-            if t_ask is not None and t_ask > 3600: t_ask = None  # >1 hour impossible
-            if s_ans is not None and s_ans > 3600: s_ans = None
+            if t['last_s']['end'] is not None and t['t2']['start'] is not None:
+                gap = t['t2']['start'] - t['last_s']['end']
+                think = round(gap, 1) if gap >= 0 else None
             records.append({
-                'q_num': i + 1,
-                'q_codes': ', '.join(row['q_codes']),
-                'teacher_ask': round(t_ask, 1) if t_ask is not None else None,
-                'student_ans': round(s_ans, 1) if s_ans is not None else None,
+                'q_num':        t['q_num'],
+                'q_codes':      t['q_codes'],
+                'teacher_ask':  round(t_ask, 1) if t_ask is not None else None,
+                'student_ans':  round(s_ans, 1) if s_ans is not None else None,
                 'teacher_think': think,
-                'text': row['text'][:80],
+                'text':         t['row']['text'][:80],
             })
         return jsonify(records)
     except Exception as e:
@@ -802,33 +833,15 @@ def api_teacher_time():
 def api_time_support():
     sheet = request.args.get('sheet', '')
     try:
-        rows = _load_time_rows(sheet)
-        results = []
-        for i, row in enumerate(rows):
-            if not (row['speaker'] == 'T' and row['has_q']):
-                continue
-            j = i + 1
-            while j < len(rows) and rows[j]['speaker'] == 'T':
-                j += 1
-            if j >= len(rows) or rows[j]['speaker'] not in ('S', 'C'):
-                continue
-            s_row = rows[j]
-            k = j + 1
-            while k < len(rows) and rows[k]['speaker'] in ('S', 'C'):
-                k += 1
-            if k >= len(rows) or rows[k]['speaker'] != 'T':
-                continue
-            t2 = rows[k]
-            results.append({
-                'q_num': i + 1,
-                'q_codes': ', '.join(row['q_codes']),
-                'teacher_q': row['text'][:80],
-                'student_ans': s_row['text'][:80],
-                'teacher_followup': t2['text'][:80],
-                'support': _classify_support(t2['text']),
-                'extended': _classify_extend(t2),
-            })
-        return jsonify(results)
+        return jsonify([{
+            'q_num':           t['q_num'],
+            'q_codes':         t['q_codes'],
+            'teacher_q':       t['row']['text'][:80],
+            'student_ans':     t['s_row']['text'][:80],
+            'teacher_followup': t['t2']['text'][:80],
+            'support':         t['support'],
+            'extended':        t['extended'],
+        } for t in _build_triplets(_load_time_rows(sheet))])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -837,46 +850,12 @@ def api_time_support():
 def api_time_question_chain():
     sheet = request.args.get('sheet', '')
     try:
-        rows = _load_time_rows(sheet)
-        triplets = []
-        for i, row in enumerate(rows):
-            if not (row['speaker'] == 'T' and row['has_q']):
-                continue
-            j = i + 1
-            while j < len(rows) and rows[j]['speaker'] == 'T':
-                j += 1
-            if j >= len(rows) or rows[j]['speaker'] not in ('S', 'C'):
-                continue
-            s_row = rows[j]
-            k = j + 1
-            while k < len(rows) and rows[k]['speaker'] in ('S', 'C'):
-                k += 1
-            if k >= len(rows) or rows[k]['speaker'] != 'T':
-                continue
-            t2 = rows[k]
-            triplets.append({
-                'id':       len(triplets),
-                't1_idx':   i,
-                't2_idx':   k,
-                'q_num':    i + 1,
-                'q_codes':  ', '.join(row['q_codes']),
-                'teacher_q':      row['text'][:70],
-                'student_ans':    s_row['text'][:70],
-                'teacher_followup': t2['text'][:70],
-                'support':  _classify_support(t2['text']),
-                'extended': _classify_extend(t2),
-            })
-        # Link triplet[i] → triplet[j] when T2 of i IS T1 of j (exact row match)
-        t1_idx_map = {t['t1_idx']: t['id'] for t in triplets}
-        links = []
-        for t in triplets:
-            if t['extended'] and t['t2_idx'] in t1_idx_map:
-                links.append({'source': t['id'], 'target': t1_idx_map[t['t2_idx']]})
+        triplets = _build_triplets(_load_time_rows(sheet))
         nodes = [{'id': t['id'], 'q_num': t['q_num'], 'q_codes': t['q_codes'],
-                  'teacher_q': t['teacher_q'], 'student_ans': t['student_ans'],
-                  'teacher_followup': t['teacher_followup'],
+                  'teacher_q': t['row']['text'][:70], 'student_ans': t['s_row']['text'][:70],
+                  'teacher_followup': t['t2']['text'][:70],
                   'support': t['support'], 'extended': t['extended']} for t in triplets]
-        return jsonify({'nodes': nodes, 'links': links})
+        return jsonify({'nodes': nodes, 'links': _chain_links(triplets)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -885,45 +864,12 @@ def api_time_question_chain():
 def api_analysis_question_chain():
     sheet = request.args.get('sheet', '')
     try:
-        rows = _load_analysis_rows(sheet)
-        triplets = []
-        for i, row in enumerate(rows):
-            if not (row['speaker'] == 'T' and row['has_q']):
-                continue
-            j = i + 1
-            while j < len(rows) and rows[j]['speaker'] == 'T':
-                j += 1
-            if j >= len(rows) or rows[j]['speaker'] != 'S':
-                continue
-            s_row = rows[j]
-            k = j + 1
-            while k < len(rows) and rows[k]['speaker'] == 'S':
-                k += 1
-            if k >= len(rows) or rows[k]['speaker'] != 'T':
-                continue
-            t2 = rows[k]
-            triplets.append({
-                'id':       len(triplets),
-                't1_idx':   i,
-                't2_idx':   k,
-                'q_num':    i + 1,
-                'q_codes':  ', '.join(row['q_codes']),
-                'teacher_q':      row['text'][:70],
-                'student_ans':    s_row['text'][:70],
-                'teacher_followup': t2['text'][:70],
-                'support':  _classify_support(t2['text']),
-                'extended': _classify_extend(t2),
-            })
-        t1_idx_map = {t['t1_idx']: t['id'] for t in triplets}
-        links = []
-        for t in triplets:
-            if t['extended'] and t['t2_idx'] in t1_idx_map:
-                links.append({'source': t['id'], 'target': t1_idx_map[t['t2_idx']]})
+        triplets = _build_triplets(_load_analysis_rows(sheet), s_speakers=frozenset({'S'}))
         nodes = [{'id': t['id'], 'q_num': t['q_num'], 'q_codes': t['q_codes'],
-                  'teacher_q': t['teacher_q'], 'student_ans': t['student_ans'],
-                  'teacher_followup': t['teacher_followup'],
+                  'teacher_q': t['row']['text'][:70], 'student_ans': t['s_row']['text'][:70],
+                  'teacher_followup': t['t2']['text'][:70],
                   'support': t['support'], 'extended': t['extended']} for t in triplets]
-        return jsonify({'nodes': nodes, 'links': links})
+        return jsonify({'nodes': nodes, 'links': _chain_links(triplets)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -980,7 +926,7 @@ def _load_analysis_rows(sheet_name):
             continue
         if spk_raw not in ('Багш', 'Сурагч', 'Сурагчид', 'T', 'S', 'C'):
             continue
-        spk = 'T' if spk_raw == 'Багш' else 'S'
+        spk = 'T' if spk_raw in ('Багш', 'T') else 'S'
         text = str(row.iloc[tc]).strip() if tc < len(row) and pd.notna(row.iloc[tc]) else ''
         q_raw = str(row.iloc[qc]).strip() if qc < len(row) and pd.notna(row.iloc[qc]) else ''
         q_codes = []
@@ -1047,33 +993,15 @@ def api_analysis_summary():
 def api_analysis_support():
     sheet = request.args.get('sheet', '')
     try:
-        rows = _load_analysis_rows(sheet)
-        results = []
-        for i, row in enumerate(rows):
-            if not (row['speaker'] == 'T' and row['has_q']):
-                continue
-            j = i + 1
-            while j < len(rows) and rows[j]['speaker'] == 'T':
-                j += 1
-            if j >= len(rows) or rows[j]['speaker'] != 'S':
-                continue
-            s_row = rows[j]
-            k = j + 1
-            while k < len(rows) and rows[k]['speaker'] == 'S':
-                k += 1
-            if k >= len(rows) or rows[k]['speaker'] != 'T':
-                continue
-            t2 = rows[k]
-            results.append({
-                'q_num': i + 1,
-                'q_codes': ', '.join(row['q_codes']),
-                'teacher_q': row['text'][:80],
-                'student_ans': s_row['text'][:80],
-                'teacher_followup': t2['text'][:80],
-                'support': _classify_support(t2['text']),
-                'extended': _classify_extend(t2),
-            })
-        return jsonify(results)
+        return jsonify([{
+            'q_num':           t['q_num'],
+            'q_codes':         t['q_codes'],
+            'teacher_q':       t['row']['text'][:80],
+            'student_ans':     t['s_row']['text'][:80],
+            'teacher_followup': t['t2']['text'][:80],
+            'support':         t['support'],
+            'extended':        t['extended'],
+        } for t in _build_triplets(_load_analysis_rows(sheet), s_speakers=frozenset({'S'}))])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
