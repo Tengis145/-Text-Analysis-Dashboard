@@ -595,13 +595,19 @@ def transcription_status():
 # ══════════════════════════════════════════════════════════════════════════════
 # TIME ANALYSIS — DATA_time & 50_analysis Excel routes
 # ══════════════════════════════════════════════════════════════════════════════
+try:
+    import ml_classify as _ml
+    ML_OK = _ml.SKLEARN_OK
+except Exception:
+    _ml = None
+    ML_OK = False
 F_TIME     = Path(r"C:\Users\Dell\Downloads\DATA_time (1) (1).xlsx")
 F_ANALYSIS = Path(r"C:\Users\Dell\Downloads\50_analysis (2).xlsx")
 
 BLOOM_MAP = {
-    'Q1': 'Q1: Санах',    'Q2': 'Q2: Ойлгох',  'Q3': 'Q3: Хэрэглэх',
-    'Q4': 'Q4: Шинжлэх', 'Q5': 'Q5: Үнэлэх',  'Q6': 'Q6: Бүтээх',
-    'QL': 'QL: Доод түвшний', 'QO': 'QO: Нээлттэй', 'QC': 'QC: Хаалттай',
+    'Q1': 'Q1: Сэргээн санах',   'Q2': 'Q2: Ойлгох',           'Q3': 'Q3: Хэрэглэх',
+    'Q4': 'Q4: Задлан шинжлэх',  'Q5': 'Q5: Үнэлэх',           'Q6': 'Q6: Бүтээх',
+    'QL': 'QL: Доод түвшний',     'QO': 'QO: Нээлттэй асуулт',  'QC': 'QC: Хаалттай асуулт',
 }
 BLOOM_COLORS = {
     'Q1': '#3498db', 'Q2': '#2ecc71', 'Q3': '#e67e22',
@@ -635,19 +641,37 @@ Q_TYPES = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'QL', 'QO', 'QC']
 
 
 def _parse_time_sec(t):
-    """Parse MM:SS or MM:SS:cs (not HH:MM:SS) — classroom timestamps are in minutes."""
+    """Parse classroom timestamps into seconds.
+
+    Handles:
+      MM:SS            → standard
+      MM:SS:cs         → with centiseconds
+      MM:SSм / MM:SSm  → Mongolian suffix
+      'N day, H:MM:SS' → pandas timedelta when Excel [HH]:MM:SS > 24h
+                          e.g. '1 day, 1:45:00' = [25]:45:00 → 25 min 45 sec
+      Internal spaces  → '24:11 м', '27: 26м' stripped before parsing
+    """
     s = str(t).strip()
     if s in {'nan', 'NaN', '', 'Цаг', 'минут',
              'Ярьж эхэлсэн хугацаа', 'Ярьж дууссан хугацаа'} or s.startswith('Unnamed'):
         return None
-    s = s.rstrip('m').strip()
+
+    # Pandas timedelta '1 day, H:MM:SS' — Excel [HH]:MM cell > 24h
+    td = re.match(r'^(\d+)\s+day[s]?,\s*(\d+):(\d+):(\d+)$', s)
+    if td:
+        days, h, mm, ss = int(td.group(1)), int(td.group(2)), int(td.group(3)), int(td.group(4))
+        return (days * 24 + h) * 60 + mm + ss / 60
+
+    # Remove internal whitespace ('27: 26м' → '27:26м', '24:11 м' → '24:11м')
+    s = re.sub(r'\s+', '', s)
+    # Strip Mongolian/Latin minute suffix
+    s = s.rstrip('мm').strip()
+
     parts = s.split(':')
     try:
         if len(parts) == 3:
-            # MM:SS:cs  — minutes : seconds : centiseconds
             return int(parts[0]) * 60 + int(parts[1]) + float(parts[2]) / 100
         if len(parts) == 2:
-            # MM:SS
             return int(parts[0]) * 60 + float(parts[1])
     except Exception:
         return None
@@ -658,6 +682,9 @@ def _extract_q(text):
 
 
 def _classify_support(text):
+    if ML_OK:
+        label, _ = _ml.support_classify(text)
+        return label
     t = str(text).lower()
     return 'Дэмжсэн' if any(w in t for w in SUPPORT_WORDS) else 'Дэмжээгүй'
 
@@ -739,8 +766,13 @@ def _load_time_rows(sheet_name):
         dur = raw_dur if (raw_dur is not None and 0 < raw_dur <= 3600) else None
         text = str(row[4]) if pd.notna(row[4]) else ''
         qc = _extract_q(text)
+        try:
+            conv_num = int(float(str(row[3])))
+        except Exception:
+            conv_num = None
         rows.append({'speaker': spk, 'start': t0, 'end': t1,
-                     'duration': dur, 'text': text, 'q_codes': qc, 'has_q': bool(qc)})
+                     'duration': dur, 'text': text, 'q_codes': qc, 'has_q': bool(qc),
+                     'conv_num': conv_num})
     return rows
 
 
@@ -766,18 +798,49 @@ def api_time_summary():
         t_dur = sum(r['duration'] for r in rows if r['speaker'] == 'T' and valid_dur(r['duration']))
         s_dur = sum(r['duration'] for r in rows if r['speaker'] in ('S', 'C') and valid_dur(r['duration']))
         all_q = [q for r in rows for q in r['q_codes']]
-        seg_size = max(1, len(rows) // 10)
+        # 3 segments by Харилцан ярианы дугаар (col 3 conversation number)
+        conv_nums = [r['conv_num'] for r in rows if r['conv_num'] is not None]
         seg_q = []
-        for i in range(10):
-            chunk = rows[i * seg_size:(i + 1) * seg_size if i < 9 else len(rows)]
-            cnt = Counter(q for r in chunk for q in r['q_codes'])
-            seg_q.append({qt: cnt.get(qt, 0) for qt in Q_TYPES})
+        seg_speakers = []
+        if conv_nums:
+            max_conv = max(conv_nums)
+            for i in range(3):
+                lo = max_conv * i / 3
+                hi = max_conv * (i + 1) / 3
+                if i == 0:
+                    chunk = [r for r in rows if r['conv_num'] is not None and r['conv_num'] <= hi]
+                    lo_label = 1
+                else:
+                    chunk = [r for r in rows if r['conv_num'] is not None and lo < r['conv_num'] <= hi]
+                    lo_label = int(lo) + 1
+                hi_label = int(hi)
+                cnt = Counter(q for r in chunk for q in r['q_codes'])
+                seg_q.append({qt: cnt.get(qt, 0) for qt in Q_TYPES})
+                spk_cnt = Counter(r['speaker'] for r in chunk)
+                seg_speakers.append({
+                    'T': spk_cnt.get('T', 0),
+                    'S': spk_cnt.get('S', 0),
+                    'C': spk_cnt.get('C', 0),
+                    'label': f'Сег {i+1} ({lo_label}–{hi_label})',
+                })
+        else:
+            seg_size = max(1, len(rows) // 3)
+            for i in range(3):
+                chunk = rows[i * seg_size:(i + 1) * seg_size if i < 2 else len(rows)]
+                cnt = Counter(q for r in chunk for q in r['q_codes'])
+                seg_q.append({qt: cnt.get(qt, 0) for qt in Q_TYPES})
+                spk_cnt = Counter(r['speaker'] for r in chunk)
+                seg_speakers.append({
+                    'T': spk_cnt.get('T', 0), 'S': spk_cnt.get('S', 0),
+                    'C': spk_cnt.get('C', 0), 'label': f'Сег {i+1}',
+                })
         return jsonify({
             'teacher_time': round(t_dur, 1),
             'student_time': round(s_dur, 1),
             'total_turns': len(rows),
             'q_counts': dict(Counter(all_q)),
             'seg_q': seg_q,
+            'seg_speakers': seg_speakers,
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -788,13 +851,27 @@ def api_time_segments():
     sheet = request.args.get('sheet', '')
     try:
         rows = _load_time_rows(sheet)
+        conv_nums = [r['conv_num'] for r in rows if r['conv_num'] is not None]
+        max_conv = max(conv_nums) if conv_nums else len(rows)
+
+        def seg_of(conv_num):
+            if conv_num is None:
+                return None
+            if conv_num <= max_conv / 3:
+                return 1
+            if conv_num <= max_conv * 2 / 3:
+                return 2
+            return 3
+
         return jsonify([{
-            'speaker': r['speaker'],
-            'start': r['start'],
-            'end': r['end'],
+            'speaker':  r['speaker'],
+            'start':    r['start'],
+            'end':      r['end'],
             'duration': round(r['duration'], 1) if r['duration'] else None,
-            'q_codes': r['q_codes'],
-            'text': r['text'][:100],
+            'q_codes':  r['q_codes'],
+            'text':     r['text'][:120],
+            'conv_num': r['conv_num'],
+            'segment':  seg_of(r['conv_num']),
         } for r in rows])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -833,15 +910,22 @@ def api_teacher_time():
 def api_time_support():
     sheet = request.args.get('sheet', '')
     try:
-        return jsonify([{
-            'q_num':           t['q_num'],
-            'q_codes':         t['q_codes'],
-            'teacher_q':       t['row']['text'][:80],
-            'student_ans':     t['s_row']['text'][:80],
-            'teacher_followup': t['t2']['text'][:80],
-            'support':         t['support'],
-            'extended':        t['extended'],
-        } for t in _build_triplets(_load_time_rows(sheet))])
+        result = []
+        for t in _build_triplets(_load_time_rows(sheet)):
+            conf = None
+            if ML_OK:
+                _, conf = _ml.support_classify(t['t2']['text'])
+            result.append({
+                'q_num':            t['q_num'],
+                'q_codes':          t['q_codes'],
+                'teacher_q':        t['row']['text'][:80],
+                'student_ans':      t['s_row']['text'][:80],
+                'teacher_followup': t['t2']['text'][:80],
+                'support':          t['support'],
+                'extended':         t['extended'],
+                'confidence':       round(conf, 3) if conf is not None else None,
+            })
+        return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -973,17 +1057,24 @@ def api_analysis_summary():
     try:
         rows = _load_analysis_rows(sheet)
         all_q = [q for r in rows for q in r['q_codes']]
-        seg_size = max(1, len(rows) // 10)
+        seg_size = max(1, len(rows) // 3)
         seg_q = []
-        for i in range(10):
-            chunk = rows[i * seg_size:(i + 1) * seg_size if i < 9 else len(rows)]
+        seg_speakers = []
+        for i in range(3):
+            chunk = rows[i * seg_size:(i + 1) * seg_size if i < 2 else len(rows)]
             cnt = Counter(q for r in chunk for q in r['q_codes'])
             seg_q.append({qt: cnt.get(qt, 0) for qt in ['1', '2'] + Q_TYPES})
+            spk_cnt = Counter(r['speaker'] for r in chunk)
+            seg_speakers.append({
+                'T': spk_cnt.get('T', 0), 'S': spk_cnt.get('S', 0),
+                'C': spk_cnt.get('C', 0), 'label': f'Сег {i+1}',
+            })
         return jsonify({
             'teacher_time': None, 'student_time': None,
             'total_turns': len(rows),
             'q_counts': dict(Counter(all_q)),
             'seg_q': seg_q,
+            'seg_speakers': seg_speakers,
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -993,15 +1084,22 @@ def api_analysis_summary():
 def api_analysis_support():
     sheet = request.args.get('sheet', '')
     try:
-        return jsonify([{
-            'q_num':           t['q_num'],
-            'q_codes':         t['q_codes'],
-            'teacher_q':       t['row']['text'][:80],
-            'student_ans':     t['s_row']['text'][:80],
-            'teacher_followup': t['t2']['text'][:80],
-            'support':         t['support'],
-            'extended':        t['extended'],
-        } for t in _build_triplets(_load_analysis_rows(sheet), s_speakers=frozenset({'S'}))])
+        result = []
+        for t in _build_triplets(_load_analysis_rows(sheet), s_speakers=frozenset({'S'})):
+            conf = None
+            if ML_OK:
+                _, conf = _ml.support_classify(t['t2']['text'])
+            result.append({
+                'q_num':            t['q_num'],
+                'q_codes':          t['q_codes'],
+                'teacher_q':        t['row']['text'][:80],
+                'student_ans':      t['s_row']['text'][:80],
+                'teacher_followup': t['t2']['text'][:80],
+                'support':          t['support'],
+                'extended':         t['extended'],
+                'confidence':       round(conf, 3) if conf is not None else None,
+            })
+        return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1018,6 +1116,63 @@ def api_analysis_bloom():
             label = ANALYSIS_Q_LABEL.get(k, BLOOM_MAP.get(k, k))
             color = ANALYSIS_Q_COLOR.get(k, BLOOM_COLORS.get(k, '#999'))
             result.append({'code': k, 'label': label, 'count': v, 'color': color})
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _bloom_ml_for_rows(rows):
+    """Classify all teacher utterances with ML Bloom classifier."""
+    if not ML_OK:
+        return {'error': 'sklearn not installed'}, 503
+    clf = _ml._get_bloom()
+    sup_clf = _ml._get_support()
+    result = []
+    cnt = Counter()
+    for r in rows:
+        if r['speaker'] != 'T' or not r['text'].strip():
+            continue
+        level, conf = clf.predict(r['text'])
+        cnt[level] += 1
+        support = None
+        if sup_clf is not None:
+            support, _ = sup_clf.predict(r['text'])
+        result.append({
+            'text': r['text'][:100],
+            'level': level,
+            'label': _ml.BLOOM_LABELS.get(level, level),
+            'confidence': round(conf, 3),
+            'color': _ml.BLOOM_COLORS.get(level, '#999'),
+            'conv_num': r.get('conv_num'),
+            'support': support,
+        })
+    distribution = [
+        {'code': k, 'label': _ml.BLOOM_LABELS.get(k, k),
+         'count': v, 'color': _ml.BLOOM_COLORS.get(k, '#999')}
+        for k, v in sorted(cnt.items(), key=lambda x: -x[1])
+    ]
+    return {'distribution': distribution, 'rows': result}
+
+
+@app.route('/api/time/bloom-ml')
+def api_time_bloom_ml():
+    sheet = request.args.get('sheet', '')
+    try:
+        result = _bloom_ml_for_rows(_load_time_rows(sheet))
+        if isinstance(result, tuple):
+            return jsonify(result[0]), result[1]
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/bloom-ml')
+def api_analysis_bloom_ml():
+    sheet = request.args.get('sheet', '')
+    try:
+        result = _bloom_ml_for_rows(_load_analysis_rows(sheet))
+        if isinstance(result, tuple):
+            return jsonify(result[0]), result[1]
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

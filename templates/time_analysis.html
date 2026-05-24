@@ -81,18 +81,41 @@ tr:hover td{background:#fafcff;}
   <div class="tab" onclick="switchTab(4)">Асуултын сүлжээ</div>
 </div>
 
-<!-- ── PAGE 0: Segment & Q count ─────────────────────────────── -->
+<!-- ── PAGE 0: Segment speaker distribution ───────────────────── -->
 <div class="page active" id="page0">
   <div class="metrics" id="seg-metrics"><div class="spinner"></div></div>
   <div class="card">
-    <h3>Q кодын тархалт — 10 сегментэд хуваасан</h3>
-    <canvas id="segChart" height="120"></canvas>
+    <h3>Харилцан ярианы дугаараар 3 сегментэд хуваасан — Багш / Сурагч / Анги тээлтийн тоо</h3>
+    <canvas id="segChart" height="140"></canvas>
   </div>
   <div class="card">
-    <h3>Ярилцлагын жагсаалт</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <h3 style="margin:0">Ярилцлагын жагсаалт</h3>
+      <div style="display:flex;gap:8px;align-items:center;font-size:0.83em;">
+        <label style="font-weight:600">Сегмент шүүх:</label>
+        <select id="segFilter" onchange="filterSegTable()" style="padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f8f9fa;">
+          <option value="0">Бүгд</option>
+          <option value="1">Сег 1</option>
+          <option value="2">Сег 2</option>
+          <option value="3">Сег 3</option>
+        </select>
+        <label style="font-weight:600;margin-left:6px;">Хүн:</label>
+        <select id="spkFilter" onchange="filterSegTable()" style="padding:4px 10px;border:1px solid #ccc;border-radius:6px;background:#f8f9fa;">
+          <option value="">Бүгд</option>
+          <option value="T">Багш (T)</option>
+          <option value="S">Сурагч (S)</option>
+          <option value="C">Анги (C)</option>
+        </select>
+        <span id="segRowCount" style="color:#888;font-size:0.82em;margin-left:4px;"></span>
+      </div>
+    </div>
     <div class="tbl-wrap">
       <table id="segTable">
-        <thead><tr><th>Хүн</th><th>Эхлэл</th><th>Дуусгавар</th><th>Q код</th><th>Текст</th></tr></thead>
+        <thead><tr>
+          <th>#</th><th>Сег</th><th>Хүн</th>
+          <th>Эхлэл</th><th>Дуусгавар</th><th>Хугацаа</th>
+          <th>Q код</th><th>Текст</th>
+        </tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -116,7 +139,7 @@ tr:hover td{background:#fafcff;}
     <h3>Дэлгэрэнгүй хүснэгт</h3>
     <div class="tbl-wrap">
       <table id="timeTable">
-        <thead><tr><th>#</th><th>Q код</th><th>Багш асуух (сек)</th>
+        <thead><tr><th>Харилцан ярианы дугаар</th><th>Багш асуух (сек)</th>
           <th>Сурагч хариулт (сек)</th><th>Багш боловсруулах (сек)</th><th>Асуулт</th></tr></thead>
         <tbody></tbody>
       </table>
@@ -126,6 +149,10 @@ tr:hover td{background:#fafcff;}
 
 <!-- ── PAGE 2: Teacher support + Extension ─────────────────── -->
 <div class="page" id="page2">
+  <div style="background:#eaf4fb;border:1px solid #aed6f1;border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:0.82em;color:#1a5276;">
+    <strong>ML дэмжлэг ангилал:</strong> Багшийн дараагийн ярианы өгүүлбэрийг Логистик регресс (TF-IDF char n-gram) аргаар Дэмжсэн / Дэмжээгүй гэж ангилна.
+    Итгэлцлийн хувь (%) мөн харагдана.
+  </div>
   <div class="metrics" id="sup-metrics"><div class="spinner"></div></div>
   <div class="chart-row">
     <div class="card" style="max-width:360px;">
@@ -138,13 +165,13 @@ tr:hover td{background:#fafcff;}
     </div>
   </div>
   <div class="card">
-    <h3>T → S → T дарааллын жагсаалт</h3>
+    <h3>T → S → T дарааллын жагсаалт (ML дэмжлэг ангилал)</h3>
     <div class="tbl-wrap">
       <table id="supTable">
         <thead><tr>
           <th>#</th><th>Q код</th><th>Багшийн асуулт</th>
           <th>Сурагчийн хариулт</th><th>Багшийн дараагийн яриа</th>
-          <th>Дэмжлэг</th><th>Дэлгэрэлт</th>
+          <th>Дэмжлэг (ML)</th><th>Итгэлцэл</th><th>Дэлгэрэлт</th>
         </tr></thead>
         <tbody></tbody>
       </table>
@@ -152,25 +179,31 @@ tr:hover td{background:#fafcff;}
   </div>
 </div>
 
-<!-- ── PAGE 3: Bloom taxonomy ────────────────────────────────── -->
+<!-- ── PAGE 3: Bloom taxonomy (ML) ───────────────────────────── -->
 <div class="page" id="page3">
+  <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:0.82em;color:#856404;">
+    <strong>ML ангилал:</strong> Багшийн асуултыг Блумын таксономийн 6 түвшинд (Q1–Q6) TF-IDF + косинусын ижил төстэй байдлын аргаар автоматаар ангилна.
+    Q1=Санах, Q2=Ойлгох, Q3=Хэрэглэх, Q4=Шинжлэх, Q5=Үнэлэх, Q6=Бүтээх
+  </div>
   <div class="metrics" id="bloom-metrics"><div class="spinner"></div></div>
   <div class="chart-row">
     <div class="card" style="max-width:380px;">
-      <h3>Q кодын тархалт (Pie)</h3>
+      <h3>ML ангилалын тархалт (Pie)</h3>
       <canvas id="bloomPie" height="220"></canvas>
     </div>
     <div class="card" style="flex:1;">
-      <h3>Q код тус бүрийн тоо</h3>
+      <h3>Түвшин тус бүрийн тоо (Bloom ML)</h3>
       <canvas id="bloomBar" height="220"></canvas>
     </div>
   </div>
   <div class="card">
-    <h3>Bloom-ын ангиллын тайлбар</h3>
-    <table id="bloomTable">
-      <thead><tr><th>Q код</th><th>Нэр</th><th>Тоо</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <h3>Дэлгэрэнгүй — багш тус бүрийн асуулт ба ML ангилал</h3>
+    <div class="tbl-wrap">
+      <table id="bloomTable">
+        <thead><tr><th>Харилцан ярианы дугаар</th><th>Түвшин</th><th>Нэр</th><th>Итгэлцэл</th><th>Дэмжлэг</th><th>Асуулт</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -207,6 +240,15 @@ function fmtSec(s){
   if(s==null||isNaN(s)) return '—';
   const m=Math.floor(s/60), sec=Math.round(s%60);
   return m+':'+String(sec).padStart(2,'0');
+}
+function fmtDur(s){
+  if(s==null||isNaN(s)) return '—';
+  const m=Math.floor(s/60), sec=Math.round(s%60);
+  if(m===0) return sec+' сек';
+  return m+' мин'+(sec?' '+sec+' сек':'');
+}
+function stripQ(t){
+  return (t||'').replace(/[\s,]*(Q[1-6]|QL|QO|QC)\b[\s,]*/g,' ').replace(/\s{2,}/g,' ').trim();
 }
 
 function switchTab(n){
@@ -246,68 +288,113 @@ async function loadAll(){
   const base = apiBase();
   const src  = getSource();
 
-  const [sumR, segsR, suppR, bloomR, chainR] = await Promise.all([
+  const [sumR, segsR, suppR, chainR] = await Promise.all([
     fetch(`${base}/summary?sheet=${enc}`),
     fetch(`${base}/segments?sheet=${enc}`),
     fetch(`${base}/support?sheet=${enc}`),
-    fetch(`${base}/bloom?sheet=${enc}`),
     fetch(`${base}/question-chain?sheet=${enc}`),
   ]);
-  const [sum, segs, support, bloom, chain] = await Promise.all(
-    [sumR, segsR, suppR, bloomR, chainR].map(r => r.json())
+  const [sum, segs, support, chain] = await Promise.all(
+    [sumR, segsR, suppR, chainR].map(r => r.json())
   );
+
   let teacherT = [];
   if(src === 'time'){
     teacherT = await fetch(`/api/time/teacher-time?sheet=${enc}`).then(r => r.json());
   }
 
+  // Bloom ML — fetch asynchronously after rendering other tabs
   renderSegPage(sum, segs);
   renderTimePage(sum, teacherT, src);
   renderSupportPage(support);
-  renderBloomPage(bloom);
   renderChainPage(chain);
+  renderBloomPage(null);  // show spinner
+  fetch(`${base}/bloom-ml?sheet=${enc}`)
+    .then(r => r.json())
+    .then(data => renderBloomPage(data))
+    .catch(() => renderBloomPage({error: 'ML ангилал боломжгүй (sklearn суулгаагүй байна)'}));
 }
 
 // ── PAGE 0 ─────────────────────────────────────────────────────
 function renderSegPage(sum, segs){
-  // Metrics
   const tT = segs.filter(r=>r.speaker==='T').length;
-  const sT = segs.filter(r=>r.speaker!=='T').length;
+  const sT = segs.filter(r=>r.speaker==='S').length;
+  const cT = segs.filter(r=>r.speaker==='C').length;
   const qTotal = segs.reduce((a,r)=>a+r.q_codes.length,0);
   document.getElementById('seg-metrics').innerHTML = `
-    <div class="metric"><div class="val">${segs.length}</div><div class="lbl">Нийт ярилцлага</div></div>
-    <div class="metric"><div class="val">${tT}</div><div class="lbl">Багшийн тээлт</div></div>
-    <div class="metric"><div class="val">${sT}</div><div class="lbl">Сурагчийн тээлт</div></div>
+    <div class="metric"><div class="val">${segs.length}</div><div class="lbl">Нийт тээлт</div></div>
+    <div class="metric"><div class="val" style="color:#3498db">${tT}</div><div class="lbl">Багш (T)</div></div>
+    <div class="metric"><div class="val" style="color:#e67e22">${sT}</div><div class="lbl">Сурагч (S)</div></div>
+    <div class="metric"><div class="val" style="color:#2ecc71">${cT}</div><div class="lbl">Анги (C)</div></div>
     <div class="metric"><div class="val">${qTotal}</div><div class="lbl">Нийт Q код</div></div>`;
 
-  // Stacked bar — segments (includes '1'/'2' codes from 50_analysis)
-  const labels = Array.from({length:10},(_,i)=>'Сег '+(i+1));
-  const datasets = ALL_Q_TYPES
-    .filter(qt => sum.seg_q.some(s=>s[qt]>0))
-    .map(qt=>({
-      label: Q_LABELS[qt]||qt,
-      data: sum.seg_q.map(s=>s[qt]||0),
-      backgroundColor: Q_COLORS[qt]||'#999',
-    }));
-
+  // Grouped bar — T/S/C counts per 3 segments (NO Q codes)
+  const segs3 = sum.seg_speakers || [];
+  const labels3 = segs3.map(s=>s.label||'');
   if(charts.seg) charts.seg.destroy();
   charts.seg = new Chart(document.getElementById('segChart'),{
     type:'bar',
-    data:{labels, datasets},
-    options:{responsive:true,plugins:{legend:{position:'bottom'}},
-             scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'Q тоо'}}}}
+    data:{
+      labels: labels3,
+      datasets:[
+        {label:'Багш (T)', data:segs3.map(s=>s.T||0), backgroundColor:'#3498db'},
+        {label:'Сурагч (S)', data:segs3.map(s=>s.S||0), backgroundColor:'#e67e22'},
+        {label:'Анги (C)', data:segs3.map(s=>s.C||0), backgroundColor:'#2ecc71'},
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{legend:{position:'bottom'}},
+      scales:{
+        x:{title:{display:true,text:'Сегмент (Харилцан ярианы дугаар)'}},
+        y:{title:{display:true,text:'Тээлтийн тоо'},beginAtZero:true}
+      }
+    }
   });
 
-  // Table
+  // Table — store full segs on window for filtering
+  window._allSegs = segs;
+  document.getElementById('segFilter').value = '0';
+  document.getElementById('spkFilter').value = '';
+  fillSegTable(segs);
+}
+
+const SEG_COLORS = {1:'#3498db', 2:'#e67e22', 3:'#2ecc71'};
+
+function fillSegTable(rows){
   const tbody = document.querySelector('#segTable tbody');
-  tbody.innerHTML = segs.map(r=>`
-    <tr>
+  document.getElementById('segRowCount').textContent = `${rows.length} мөр`;
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Мөр олдсонгүй</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r,i)=>{
+    const seg = r.segment;
+    const segBadge = seg
+      ? `<span class="badge" style="background:${SEG_COLORS[seg]||'#aaa'}">${seg}</span>`
+      : '—';
+    const dur = r.duration != null ? r.duration+'с' : '—';
+    const qDisp = r.q_codes.map(c=>Q_CODE_DISP[c]||c).join(', ') || '—';
+    return `<tr>
+      <td style="color:#999;font-size:0.8em">${r.conv_num??''}</td>
+      <td>${segBadge}</td>
       <td><span class="badge badge-${r.speaker}">${r.speaker}</span></td>
-      <td>${fmtSec(r.start)}</td>
-      <td>${fmtSec(r.end)}</td>
-      <td>${r.q_codes.map(c=>Q_CODE_DISP[c]||c).join(', ')||'—'}</td>
-      <td style="color:#555">${r.text}</td>
-    </tr>`).join('');
+      <td style="font-size:0.8em;white-space:nowrap">${fmtSec(r.start)}</td>
+      <td style="font-size:0.8em;white-space:nowrap">${fmtSec(r.end)}</td>
+      <td style="font-size:0.8em;white-space:nowrap">${dur}</td>
+      <td style="font-size:0.8em">${qDisp}</td>
+      <td style="color:#444;font-size:0.79em">${r.text}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterSegTable(){
+  const segVal = parseInt(document.getElementById('segFilter').value);
+  const spkVal = document.getElementById('spkFilter').value;
+  let rows = window._allSegs || [];
+  if(segVal) rows = rows.filter(r=>r.segment===segVal);
+  if(spkVal) rows = rows.filter(r=>r.speaker===spkVal);
+  fillSegTable(rows);
 }
 
 // ── PAGE 1 ─────────────────────────────────────────────────────
@@ -328,11 +415,11 @@ function renderTimePage(sum, records, src){
   const avgTh = validTh.length ? (validTh.reduce((a,r)=>a+r.teacher_think,0)/validTh.length).toFixed(1) : 0;
 
   document.getElementById('time-metrics').innerHTML = `
-    <div class="metric"><div class="val">${fmtSec(tSec)}</div><div class="lbl">Багшийн нийт</div></div>
-    <div class="metric"><div class="val">${fmtSec(sSec)}</div><div class="lbl">Сурагчийн нийт</div></div>
+    <div class="metric"><div class="val">${fmtDur(tSec)}</div><div class="lbl">Багшийн нийт</div></div>
+    <div class="metric"><div class="val">${fmtDur(sSec)}</div><div class="lbl">Сурагчийн нийт</div></div>
     <div class="metric"><div class="val">${ratio}x</div><div class="lbl">Багш/Сурагч харьцаа</div></div>
-    <div class="metric"><div class="val">${fmtSec(+avgS)}</div><div class="lbl">Дундаж хариулт</div></div>
-    <div class="metric"><div class="val">${fmtSec(+avgTh)}</div><div class="lbl">Дундаж боловсруулалт</div></div>`;
+    <div class="metric"><div class="val">${fmtDur(+avgS)}</div><div class="lbl">Дундаж хариулт</div></div>
+    <div class="metric"><div class="val">${fmtDur(+avgTh)}</div><div class="lbl">Дундаж боловсруулалт</div></div>`;
 
   // Pie
   if(charts.tPie) charts.tPie.destroy();
@@ -366,11 +453,11 @@ function renderTimePage(sum, records, src){
   const tbody = document.querySelector('#timeTable tbody');
   tbody.innerHTML = records.map(r=>`
     <tr>
-      <td>${r.q_num}</td><td>${r.q_codes}</td>
+      <td>${r.q_num}</td>
       <td>${r.teacher_ask??'—'}</td>
       <td>${r.student_ans??'—'}</td>
       <td>${r.teacher_think??'—'}</td>
-      <td style="color:#555;font-size:0.8em">${r.text}</td>
+      <td style="color:#555;font-size:0.8em">${stripQ(r.text)}</td>
     </tr>`).join('');
 }
 
@@ -440,11 +527,14 @@ function renderSupportPage(data){
              scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'Тоо'}}}}
   });
 
-  // Table — add Дэлгэрэлт column
+  // Table — support + confidence + extension
   const tbody = document.querySelector('#supTable tbody');
   tbody.innerHTML = data.map(r=>{
     const ck = catKey(r);
     const supBadge = `<span class="badge badge-${r.support==='Дэмжсэн'?'D':'N'}">${r.support}</span>`;
+    const confTxt = r.confidence != null
+      ? `<span style="font-size:0.78em;color:#555">${Math.round(r.confidence*100)}%</span>`
+      : '—';
     const extBadge = r.extended
       ? `<span class="badge" style="background:#f39c12">Дэлгэрсэн</span>`
       : `<span class="badge" style="background:#bdc3c7;color:#fff">Дуусгасан</span>`;
@@ -454,32 +544,54 @@ function renderSupportPage(data){
       <td style="font-size:0.8em;color:#555">${r.student_ans}</td>
       <td style="font-size:0.8em;color:#555">${r.teacher_followup}</td>
       <td>${supBadge}</td>
+      <td>${confTxt}</td>
       <td>${extBadge}</td>
     </tr>`;
   }).join('');
 }
 
-// ── PAGE 3 ─────────────────────────────────────────────────────
-function renderBloomPage(data){
-  const total = data.reduce((a,d)=>a+d.count,0);
-  document.getElementById('bloom-metrics').innerHTML = data.length
-    ? data.map(d=>`
+// ── PAGE 3: Bloom ML ────────────────────────────────────────────
+function renderBloomPage(mlData){
+  const metricsEl = document.getElementById('bloom-metrics');
+  const tbodyEl   = document.querySelector('#bloomTable tbody');
+
+  // null = still loading
+  if(mlData === null){
+    metricsEl.innerHTML = '<div class="spinner"></div>';
+    tbodyEl.innerHTML   = '';
+    if(charts.bPie) charts.bPie.destroy();
+    if(charts.bBar) charts.bBar.destroy();
+    return;
+  }
+
+  // Error from server
+  if(mlData.error){
+    metricsEl.innerHTML = `<div class="empty" style="width:100%;color:#e74c3c">${mlData.error}</div>`;
+    tbodyEl.innerHTML   = '';
+    return;
+  }
+
+  const dist = mlData.distribution || [];
+  const rows = mlData.rows || [];
+  const total = dist.reduce((a,d)=>a+d.count,0);
+
+  metricsEl.innerHTML = dist.length
+    ? dist.map(d=>`
         <div class="metric">
           <div class="val" style="color:${d.color}">${d.count}</div>
-          <div class="lbl">${d.code}</div>
+          <div class="lbl" style="font-size:0.72em">${d.code}</div>
         </div>`).join('')
-    : '<div class="empty">Q код олдсонгүй</div>';
+    : '<div class="empty">Багшийн асуулт олдсонгүй</div>';
 
-  if(!data.length){ return; }
+  if(!dist.length) return;
 
   // Pie
   if(charts.bPie) charts.bPie.destroy();
   charts.bPie = new Chart(document.getElementById('bloomPie'),{
     type:'pie',
-    data:{labels:data.map(d=>d.code),
-          datasets:[{data:data.map(d=>d.count),
-                     backgroundColor:data.map(d=>d.color)}]},
-    options:{plugins:{legend:{position:'bottom'}}}
+    data:{labels:dist.map(d=>d.code+': '+d.label.split('(')[1]?.replace(')','').trim()||d.label),
+          datasets:[{data:dist.map(d=>d.count), backgroundColor:dist.map(d=>d.color)}]},
+    options:{plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}
   });
 
   // Bar
@@ -487,21 +599,30 @@ function renderBloomPage(data){
   charts.bBar = new Chart(document.getElementById('bloomBar'),{
     type:'bar',
     data:{
-      labels:data.map(d=>d.code),
-      datasets:[{label:'Тоо', data:data.map(d=>d.count),
-                 backgroundColor:data.map(d=>d.color)}]
+      labels:dist.map(d=>d.code),
+      datasets:[{label:'Тоо (ML)', data:dist.map(d=>d.count),
+                 backgroundColor:dist.map(d=>d.color)}]
     },
     options:{responsive:true,plugins:{legend:{display:false}},
-             scales:{y:{title:{display:true,text:'Тоо'}}}}
+             scales:{y:{title:{display:true,text:'Асуултын тоо'},beginAtZero:true}}}
   });
 
-  // Table
-  document.querySelector('#bloomTable tbody').innerHTML = data.map(d=>`
-    <tr>
-      <td><span class="badge" style="background:${d.color}">${d.code}</span></td>
-      <td>${d.label}</td>
-      <td><strong>${d.count}</strong> (${total?Math.round(d.count/total*100):0}%)</td>
-    </tr>`).join('');
+  // Per-utterance table with confidence
+  tbodyEl.innerHTML = rows.map(r=>{
+    const supBadge = r.support==='Дэмжсэн'
+      ? `<span class="badge badge-D">Дэмжсэн</span>`
+      : r.support==='Дэмжээгүй'
+        ? `<span class="badge badge-N">Дэмжээгүй</span>`
+        : '—';
+    return `<tr>
+      <td style="color:#999;font-size:0.8em">${r.conv_num??''}</td>
+      <td><span class="badge" style="background:${r.color};font-size:0.85em">${r.level}</span></td>
+      <td style="font-size:0.8em">${r.label}</td>
+      <td style="font-size:0.8em;color:#888">${Math.round(r.confidence*100)}%</td>
+      <td>${supBadge}</td>
+      <td style="font-size:0.79em;color:#2c3e50">${r.text}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── PAGE 4: Question network (D3 force graph) ──────────────────

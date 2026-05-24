@@ -1392,23 +1392,23 @@ async function renderQAnalysis() {
         const r   = await fetch(`${base}?sheet=${encodeURIComponent(sheet)}`);
         const sum = await r.json();
 
-        // Metrics row
-        const qTotal = Object.values(sum.q_counts || {}).reduce((a,b)=>a+b,0);
+        // Metrics
         const tTurns = sum.total_turns || 0;
+        const segs = sum.seg_speakers || [];
+        const tT = segs.reduce((a,s)=>a+s.T,0);
+        const sT = segs.reduce((a,s)=>a+s.S,0);
         document.getElementById('qa-metrics').innerHTML =
             `<span style="font-size:0.75em;color:#555;">Нийт тээлт: <strong>${tTurns}</strong></span>` +
-            `<span style="font-size:0.75em;color:#555;">Q нийт: <strong>${qTotal}</strong></span>`;
+            `<span style="font-size:0.75em;color:#3498db;">Багш: <strong>${tT}</strong></span>` +
+            `<span style="font-size:0.75em;color:#e67e22;">Сурагч: <strong>${sT}</strong></span>`;
 
-        // Build datasets from seg_q
-        const segQ = sum.seg_q || [];
-        const allKeys = [...new Set(segQ.flatMap(s => Object.keys(s)))].filter(k => segQ.some(s => s[k] > 0));
-        const labels  = Array.from({length:10}, (_,i) => `Сег ${i+1}`);
-
-        const datasets = allKeys.map(k => ({
-            label: QA_LABELS[k] || k,
-            data:  segQ.map(s => s[k] || 0),
-            backgroundColor: QA_COLORS[k] || '#aaa',
-        }));
+        // Grouped bar — T/S/C per 3 segments (matching time-analysis style)
+        const labels = segs.map(s => s.label || '');
+        const datasets = [
+            { label:'Багш (T)',  data: segs.map(s=>s.T), backgroundColor:'#3498db' },
+            { label:'Сурагч (S)',data: segs.map(s=>s.S), backgroundColor:'#e67e22' },
+            { label:'Анги (C)',  data: segs.map(s=>s.C||0), backgroundColor:'#2ecc71' },
+        ];
 
         if (qaChart) qaChart.destroy();
         qaChart = new Chart(document.getElementById('qaChart'), {
@@ -1421,13 +1421,13 @@ async function renderQAnalysis() {
                     legend: { position: 'bottom', labels: { font: { size: 9 }, boxWidth: 10 } },
                     title: {
                         display: true,
-                        text: `${sheet} — Q кодын тархалт (10 сегмент)`,
+                        text: `${sheet} — Харилцан ярианы дугаараар 3 сегментэд хуваасан — Багш / Сурагч`,
                         font: { size: 11 }
                     }
                 },
                 scales: {
-                    x: { stacked: true, ticks: { font: { size: 9 } } },
-                    y: { stacked: true, title: { display: true, text: 'Q тоо', font: { size: 9 } } }
+                    x: { ticks: { font: { size: 9 } } },
+                    y: { title: { display: true, text: 'Тээлтийн тоо', font: { size: 9 } }, beginAtZero: true }
                 }
             }
         });
