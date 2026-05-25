@@ -1122,17 +1122,21 @@ def api_analysis_bloom():
 
 
 def _bloom_ml_for_rows(rows):
-    """Classify all teacher utterances with ML Bloom classifier."""
+    """Classify all teacher utterances with ML Bloom classifier.
+
+    Uses collect_autolabel so high-confidence predictions are automatically
+    persisted to autolabel_cache.json for future retraining.
+    """
     if not ML_OK:
         return {'error': 'sklearn not installed'}, 503
-    clf = _ml._get_bloom()
     sup_clf = _ml._get_support()
     result = []
     cnt = Counter()
     for r in rows:
         if r['speaker'] != 'T' or not r['text'].strip():
             continue
-        level, conf = clf.predict(r['text'])
+        # collect_autolabel classifies AND saves if conf >= 0.70
+        level, conf = _ml.collect_autolabel(r['text'], threshold=0.70)
         cnt[level] += 1
         support = None
         if sup_clf is not None:
@@ -1152,6 +1156,46 @@ def _bloom_ml_for_rows(rows):
         for k, v in sorted(cnt.items(), key=lambda x: -x[1])
     ]
     return {'distribution': distribution, 'rows': result}
+
+
+@app.route('/api/ml/autolabel-stats')
+def api_ml_autolabel_stats():
+    """Return how many auto-labeled examples have been collected per Bloom level."""
+    if not ML_OK:
+        return jsonify({'error': 'sklearn not installed'}), 503
+    try:
+        stats = _ml.autolabel_stats()
+        return jsonify({
+            'stats': stats,
+            'using_bert': _ml.using_bert(),
+            'ready_to_retrain': stats.get('_total', 0) >= 5,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ml/retrain', methods=['POST'])
+def api_ml_retrain():
+    """Retrain Bloom classifier with auto-labeled data collected so far.
+
+    Returns 200 + retrained=True if enough data (≥5 examples) existed,
+    or 200 + retrained=False with a message if not enough yet.
+    """
+    if not ML_OK:
+        return jsonify({'error': 'sklearn not installed'}), 503
+    try:
+        min_new = int(request.json.get('min_new', 5)) if request.json else 5
+        retrained = _ml.retrain_bloom(min_new=min_new)
+        stats = _ml.autolabel_stats()
+        return jsonify({
+            'retrained': retrained,
+            'message': 'Classifier retrained successfully' if retrained
+                       else f'Not enough data yet ({stats["_total"]} / {min_new} needed)',
+            'autolabel_total': stats['_total'],
+            'using_bert': _ml.using_bert(),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/time/bloom-ml')

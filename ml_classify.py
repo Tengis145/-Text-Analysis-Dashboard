@@ -1,11 +1,18 @@
 """
 ML-based classifiers for Mongolian classroom discourse analysis.
-- BloomClassifier: keyword matching on official Anderson & Krathwohl (2001) taxonomy verbs
-  with TF-IDF cosine similarity fallback
-- SupportClassifier: logistic regression binary classifier
+
+Classifiers (in priority order):
+1. BloomBertClassifier  — XLM-RoBERTa embeddings + logistic regression (BloomBERT-style).
+                          Downloads ~280 MB on first use; cached by HuggingFace thereafter.
+2. BloomClassifier      — keyword matching + TF-IDF cosine fallback (sklearn only, fast).
+3. SupportClassifier    — logistic regression binary classifier (teacher response support).
 """
 import re
+import json
+from pathlib import Path
 import numpy as np
+
+_AUTOLABEL_FILE = Path(__file__).parent / 'autolabel_cache.json'
 
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -14,6 +21,17 @@ try:
     SKLEARN_OK = True
 except ImportError:
     SKLEARN_OK = False
+
+try:
+    import torch
+    from transformers import AutoTokenizer, AutoModel
+    TRANSFORMERS_OK = True
+except ImportError:
+    TRANSFORMERS_OK = False
+
+# XLM-RoBERTa: strong multilingual model, supports Mongolian out of the box.
+# Change to 'bert-base-multilingual-cased' for a lighter (~177 MB) alternative.
+BLOOM_BERT_MODEL = 'xlm-roberta-base'
 
 BLOOM_LABELS = {
     'Q1': 'Q1: Сэргээн санах (Remember)',
@@ -49,6 +67,17 @@ BLOOM_KEYWORDS = {
         'ажигл',          # ажиглах – observe (олж харах family)
         'хэд байна',      # how many – factual counting/recall
         'хэдэн байна',    # how many
+        'дарааллыг',      # дарааллыг хэлэх – state the sequence
+        'хаана байд',     # хаана байдаг – where is it located
+        'хэзээ болс',     # хэзээ болсон – when did it happen
+        'хэн бэ',         # who is it – factual recall
+        'юу вэ',          # what is it – simple factual
+        'баримт',         # баримт – fact/evidence (recall)
+        'тэмдэглэ',       # тэмдэглэх – note/mark
+        'сонго',          # сонгох – select/choose (recognition)
+        'заа',            # заах – point out/indicate
+        'олно уу',        # олох – find (factual)
+        'харна уу',       # харах – look at/see
     ],
     'Q2': [  # Ойлгох — explain, classify, compare, summarize
         'тайлбарл',       # тайлбарлах – explain
@@ -67,6 +96,15 @@ BLOOM_KEYWORDS = {
         'ямар учир',      # what reason
         'юу гэсэн үг',    # what does it mean
         'ямар холбоо',    # what connection
+        'хэрхэн болд',    # хэрхэн болдог – how does it work
+        'утга нь',        # утга нь юу вэ – what is the meaning
+        'агуулга',        # агуулга – content/meaning
+        'илэрхийл',       # илэрхийлэх – express/represent
+        'тайлал',         # тайлал – interpretation
+        'ойлгоно уу',     # do you understand
+        'зүйрлэ',         # зүйрлэх – analogize
+        'хураангуйл',     # хураангуйлах – summarize briefly
+        'хэрхэн ойлг',    # хэрхэн ойлгосон – how did you understand
     ],
     'Q3': [  # Хэрэглэх — apply, implement, calculate, solve
         'хэрэгжүүл',      # хэрэгжүүлэх – implement
@@ -81,6 +119,15 @@ BLOOM_KEYWORDS = {
         'шийдвэрл',       # шийдвэрлэх – solve/decide
         'дадлага',        # дадлага – practice
         'хэрэгл',         # хэрэглэх – use (broad apply)
+        'практик',        # практик – practical application
+        'хэрэгжил',       # хэрэгжилт – implementation
+        'биелүүл',        # биелүүлэх – fulfill/carry out
+        'туршиж үз',      # туршиж үзэх – try out/experiment
+        'үйлдл',          # үйлдэл – action/operation
+        'хэрэглэж',       # хэрэглэж харуул – demonstrate use
+        'практикт',       # практикт ашиглах – use in practice
+        'хийж үзэ',       # хийж үзэх – try doing
+        'үр дүн',         # үр дүн олох – find the result
     ],
     'Q4': [  # Задлан шинжлэх — analyze, break down, relate, structure
         'задл',           # задлах – break down/analyze
@@ -96,6 +143,14 @@ BLOOM_KEYWORDS = {
         'нотло',          # нотлох – prove
         'оюуны зураглал', # mind map
         'хамаарлыг',      # the relationship (analysis context)
+        'ялгаж задл',     # ялгаж задлах – differentiate and break down
+        'судл',           # судлах – study/research
+        'хэрхэн бүтс',    # хэрхэн бүтсэн – how is it structured
+        'харилцаа',       # харилцаа холбоо – relationship/connection
+        'онцлог',         # онцлог – characteristic/feature (analysis)
+        'үндсэн санаа',   # үндсэн санаа – main idea (analysis)
+        'хуваарил',       # хуваарилах – distribute/divide
+        'ангиллын',       # ангиллын үндэс – basis of classification
     ],
     'Q5': [  # Үнэлэх — evaluate, judge, critique, validate
         'шалга',          # шалгах – check/verify
@@ -111,6 +166,15 @@ BLOOM_KEYWORDS = {
         'хэрхэн сайжруул',# how to improve
         'турши',          # турших – test
         'эргэцүүл',       # эргэцүүлэх – reflect
+        'үндэслэ',        # үндэслэх – base on / ground
+        'дүгнэж үнэл',    # дүгнэж үнэлэх – conclude and evaluate
+        'ямар үндэслэл',  # ямар үндэслэлтэй – what is the rationale
+        'санал дүгнэлт',  # санал дүгнэлт – opinion/conclusion
+        'ач холбогдол',   # ач холбогдол – significance (evaluative)
+        'давуу тал',      # давуу тал – advantage
+        'сул тал',        # сул тал – weakness/disadvantage
+        'хэр зэрэг',      # хэр зэрэг – to what extent (judgment)
+        'нотолгоо',       # нотолгоо – evidence/proof
     ],
     'Q6': [  # Бүтээх — create, design, plan, produce
         'бүтээ',          # бүтээх – create (double-э distinguishes from бүтэцлэх)
@@ -123,12 +187,36 @@ BLOOM_KEYWORDS = {
         'санал гарга',    # санал гаргах – propose
         'найруул',        # найруулах – compose/direct
         'програм бич',    # write program
+        'зохио',          # зохиох – compose/write (creative)
+        'зохиомж',        # зохиомж – composition/design
+        'шинэчл',         # шинэчлэх – innovate/renew
+        'өөрчл',          # өөрчлөх – modify/transform (creative)
+        'гаргаж ир',      # гаргаж ирэх – produce/bring out
+        'нэгтгэж бүтээ',  # нэгтгэж бүтээх – combine and create
+        'хэрэгжүүлэх төл',# хэрэгжүүлэх төлөвлөгөө – implementation plan
+        'шинэ арга',      # шинэ арга – new method
+        'бүтээгдэхүүн',   # бүтээгдэхүүн – product (creation)
+        'загвар зохио',   # загвар зохиох – design a model
     ],
 }
 
 # ── Bloom training examples — used only for TF-IDF fallback centroid ──────
 BLOOM_TRAIN = {
     'Q1': [
+        # Real classroom transcript utterances (observe / recall)
+        'Зурагуудаа маш сайн ажиглаад хараарай',
+        'Ажигласан зүйлээ ангилаад дэвтэртээ бичээрэй',
+        'Эхлээд сайн ажиглана харж байгаад',
+        'Багшийн гарт байгаа зүйлийг хар ажиглая',
+        'Одоо хичээлдээ анхаарна шүү хүүхдүүдээ',
+        'Гараа өргөж байгаад хэлнэ үү',
+        'Зүгээр дотроо ажиглаад харъя',
+        'Амьд бие хооллодог гэсэн санаа тиймээ',
+        'Хөдөлдөг хөдөлдөггүй зүйлийг мэдэж авсан байна',
+        'Өсдөгүүдийг нь наасан байна тийм ээ',
+        'Амьтай амьгүй бие хоёроо ялгасан байна тиймээ',
+        'Хоол иддэг хоол иддэггүй томордог чухал санаа байна',
+        # Basic recall prompts
         'Нэрлэнэ үү', 'Жагсаалт гаргана уу', 'Жагсааж бичнэ үү',
         'Тодорхойлно уу', 'Ялгаж таньна уу', 'Сэргээн санана уу',
         'Байрлуулна уу', 'Олно уу', 'Олж харна уу', 'Нэрийг нь хэлнэ үү',
@@ -136,8 +224,42 @@ BLOOM_TRAIN = {
         'Хэзээ болсон бэ', 'Юу юу байдаг вэ', 'Давтана уу', 'Санана уу',
         'Дарааллыг хэлнэ үү', 'Баримтыг нэрлэнэ үү', 'Тэмдэглэнэ үү',
         'Ямар зүйлс байдаг вэ', 'Жагсаасан байгаарай', 'Хэдэн байна вэ',
+        # Classroom observation / factual identification
+        'Энд юу байна вэ', 'Зурган дээр юу харагдаж байна вэ',
+        'Энэ юу юм бэ дүрсийг нэрлэнэ үү',
+        'Тэмдэглэгээг нэрлэнэ үү', 'Ямар өнгөтэй вэ',
+        'Хэчнээн байна вэ', 'Юуг ажиглаж байна вэ',
+        'Хаана байрладаг вэ', 'Нэрийг нь хэлнэ үү',
+        'Дарааллыг заана уу', 'Анхны алхам нь юу вэ',
+        'Хамгийн эхнийх нь юу вэ', 'Сүүлийн нь юу вэ',
+        'Эргэж санана уу', 'Өмнө нь ярьсныг санана уу',
+        'Жагсааж хэлнэ үү', 'Нэг нэгээр нь нэрлэнэ үү',
+        'Ямар баримт байна вэ', 'Хэн хэн оролцсон бэ',
+        'Юу болсон бэ', 'Энэ хаана харагддаг вэ',
+        'Ямар нэр өгдөг вэ', 'Онцлогийг жагсаана уу',
+        'Хоёр юм нэрлэнэ үү', 'Гурван жишээ нэрлэнэ үү',
     ],
     'Q2': [
+        # Real classroom transcript utterances (explain / classify / compare)
+        'Яагаад амьд бус гэж ангилсан юм бол ялгаа нь юу вэ',
+        'Амьд ба амьд бус зүйлсийн ялгааг ярилцъя ялгаа нь юу юм бол',
+        'Энэ хэсгийг юугаар нь ингэж ангилсан бэ',
+        'Амьд бие нь амьд бусаасаа юугаараа ялгардаг юм бол',
+        'Хоёулаа ярьсан зүйлээ юу нь ижил байгаа юу нь ялгаатай байгаа',
+        'Яаж загварчилмаар байна ямар загварт оруулж ангилмаар байна',
+        'Дараагийн ангилалд юу гэх юм бол',
+        'Амьд биеэ дахиад ангилъя дотор нь ангилна ямар шинж чанараар',
+        'Туулайг хурдан яст мэлхий удаан гэж ангилсан байна',
+        'Цэцэг шар мод шар биш гэж ангилсан байна',
+        'Хүүхэд хөдөлдөг нар доор хөдөлдөг гэж ангилсан байна',
+        'Амьд амьд бус зүйлс гэж хоёр ангилсан байна',
+        'Байгаль буюу хот гэж ангилсан байна',
+        'Хүн амьтан ургамал гэж ангилж болох юм байна',
+        'Ургамал гэж ангилж болох юм байна дахиад нэг ангиллаа давтъя',
+        'Өсдөг өсдөггүй гэж наасан байна ялгаа нь юу вэ',
+        'Маш олон янзаар ангилсан байна амьд амьд бус хурдан удаан',
+        'Өөр өөрсдийнхөө санаагаар ангиллаа биччихсэн тийм ээ',
+        # Understanding / explaining
         'Тайлбарлана уу', 'Дүгнэнэ үү', 'Дүгнэлт хийнэ үү',
         'Өөрийн үгээр илэрхийлнэ үү', 'Өөрийн үгээр хэлнэ үү',
         'Ангилна уу', 'Бүлэглэнэ үү', 'Харьцуулна уу',
@@ -146,8 +268,22 @@ BLOOM_TRAIN = {
         'Хэрхэн ойлгосон бэ', 'Ялгаа нь юу вэ', 'Ижил тал нь юу вэ',
         'Ямар учиртай вэ', 'Хэрхэн болдог вэ', 'Ойлгосноо хэлнэ үү',
         'Зүйрлэж тайлбарлана уу', 'Агуулгыг ойлгосноо харуулна уу',
+        # Classroom comprehension prompts
+        'Юу гэсэн утгатай вэ', 'Яагаад ийм байна вэ',
+        'Яагаад тийм болдог вэ', 'Хэрхэн ойлгох вэ',
+        'Ойлгосоноо тайлбарлаарай', 'Өөрийн үгээр тайлбарлаарай',
+        'Хоёрыг харьцуулна уу', 'Ямар ялгаатай вэ',
+        'Ямар ижил талтай вэ', 'Учир нь юу вэ',
+        'Яагаад чухал вэ', 'Ямар холбоотой вэ',
+        'Ямар утга агуулдаг вэ', 'Тайлбарлаж өгнэ үү',
+        'Хэрхэн болдогийг тайлбарла', 'Ямар нөлөө үзүүлдэг вэ',
+        'Жишээгээр тайлбарлана уу', 'Богинохон дүгнэнэ үү',
+        'Гол санаа нь юу вэ', 'Агуулга нь юу вэ',
+        'Ойлгосоноо харуулна уу', 'Хэрхэн тайлбарлах вэ',
+        'Бусдад хэрхэн тайлбарлах вэ', 'Яагаад гэдгийг тайлбарла',
     ],
     'Q3': [
+        # Application / problem solving
         'Хэрэгжүүлнэ үү', 'Хувирган хэрэглэнэ үү', 'Гүйцэтгэнэ үү',
         'Ашиглана уу', 'Хэрэглэнэ үү', 'Хэрхэн хэрэглэх вэ',
         'Тооцоолно уу', 'Шийдвэрлэнэ үү', 'Бодлого бодно уу',
@@ -155,8 +291,22 @@ BLOOM_TRAIN = {
         'Ямар аргаар бодох вэ', 'Туршиж үзнэ үү', 'Дадлага хийнэ үү',
         'Практикт ашиглана уу', 'Үр дүнг олно уу', 'Хэрхэн шийдэх вэ',
         'Тооцооллыг хийнэ үү', 'Биелүүлнэ үү',
+        # Classroom application prompts
+        'Энэ аргыг хэрэгжүүлнэ үү', 'Дүрмийг хэрэглэнэ үү',
+        'Жишээн дээр хийж үзнэ үү', 'Бодлогыг шийдвэрлэнэ үү',
+        'Аргаа хэрэглэж бодно уу', 'Практик даалгавар хийнэ үү',
+        'Хэрхэн хийх вэ гэдгийг харуулна уу',
+        'Арга барилыг хэрэглэнэ үү', 'Өмнөх мэдлэгээ ашиглана уу',
+        'Тооцооллыг гүйцэтгэнэ үү', 'Алгоритмыг хэрэгжүүлнэ үү',
+        'Загварыг хэрэглэнэ үү', 'Шийдлийг олж харуулна уу',
+        'Энэ нөхцөлд ямар арга хэрэглэх вэ',
+        'Мэдлэгээ шинэ нөхцөлд ашиглана уу',
+        'Хэрэглэж болох арга нь юу вэ', 'Хэрэгжүүлнэ үү харуулна уу',
+        'Ямар үйлдэл хийх вэ', 'Дараа нь юу хийх вэ',
+        'Хэрхэн хийж болохыг харуулна уу',
     ],
     'Q4': [
+        # Analysis / breaking down
         'Задлана уу', 'Холбон үзнэ үү', 'Тойм зургийг гаргана уу',
         'Олж илрүүлнэ үү', 'Бүтэцлэнэ үү', 'Нэгтгэнэ үү',
         'Зохион байгуулна уу', 'Шинжилнэ үү', 'Хэсгүүдэд хуваана уу',
@@ -164,8 +314,23 @@ BLOOM_TRAIN = {
         'Ямар шалтгаантай вэ', 'Судлана уу', 'Хэрхэн бүтсэн вэ',
         'Учир шалтгааныг олно уу', 'Нотлоно уу', 'Харьцуулан шинжилнэ үү',
         'Хамаарлыг тодорхойлно уу', 'Оюуны зураглал хийнэ үү',
+        # Classroom analysis prompts
+        'Бүтцийг задлана уу', 'Хэсэг хэсгээр нь авч үзнэ үү',
+        'Ямар хэсгүүдээс тогтдог вэ', 'Хоорондын холбоог харуулна уу',
+        'Яагаад ийм болсон бэ учрыг тайлбарла',
+        'Шалтгаан үр дагаврыг тодорхойлно уу',
+        'Нотолгоогоо гаргана уу', 'Дүн шинжилгээ хийнэ үү',
+        'Ямар хэв маяг байна вэ', 'Судалгаа хийнэ үү',
+        'Бүтцийг шинжилнэ үү', 'Хоорондын хамаарлыг тодорхойл',
+        'Элементүүдийг ялгаж задла', 'Дотоод бүтцийг харуулна уу',
+        'Хэсгүүд нь хэрхэн холбоотой вэ',
+        'Гол ба дэд санааг ялгана уу', 'Холбоог олж харна уу',
+        'Хоёрын ялгааг задлан шинжилнэ үү',
+        'Нотлох баримт гаргана уу', 'Гүнзгий шинжилгээ хийнэ үү',
+        'Ямар хүчин зүйлс нөлөөлдөг вэ',
     ],
     'Q5': [
+        # Evaluation / judging
         'Шалгана уу', 'Таамаглана уу', 'Шүүмжилнэ үү',
         'Туршина уу', 'Шинжлэнэ үү', 'Нээн илрүүлнэ үү',
         'Хяналт хийнэ үү', 'Баталгаажуулна уу', 'Хянаж үзнэ үү',
@@ -174,8 +339,24 @@ BLOOM_TRAIN = {
         'Хамгийн сайн нь аль вэ', 'Зөв үү буруу үү',
         'Аль нь илүү оновчтой вэ', 'Зөв гэж үзэх үндэслэл нь юу вэ',
         'Хэрхэн сайжруулах байсан бэ', 'Санал бодлоо хэлнэ үү',
+        # Classroom evaluation prompts
+        'Энэ зөв үү буруу үү яагаад', 'Ямар давуу сул талтай вэ',
+        'Хамгийн оновчтой нь аль вэ', 'Таны үнэлгээ ямар байна вэ',
+        'Энэ хариулт зөв гэж үзэх үү', 'Шүүмжлэлт дүгнэлт хийнэ үү',
+        'Хэр зэрэг үр дүнтэй вэ', 'Ямар шалгуурыг ашиглах вэ',
+        'Нотолгоо дээр үндэслэн дүгнэнэ үү',
+        'Үнэ цэнийг тодорхойлно уу', 'Хэр чухал вэ яагаад',
+        'Аль арга нь илүү тохиромжтой вэ',
+        'Шийдвэр гаргахдаа ямар шалгуур ашиглах вэ',
+        'Дүгнэж хэлнэ үү зөв гэж үзэх үү',
+        'Энэ арга нь хэр үр дүнтэй вэ',
+        'Ямар нотолгоо дээр тулгуурласан вэ',
+        'Сайжруулах санал гаргана уу', 'Дахин эргэцүүлж үзнэ үү',
+        'Ямар дүгнэлтэд хүрч болох вэ',
+        'Өөрийнхөө хариултыг шалгана уу',
     ],
     'Q6': [
+        # Creation / design / planning
         'Бүтээнэ үү', 'Зохионо уу', 'Төлөвлөнэ үү',
         'Боловсруулна уу', 'Санаачилна уу', 'Зохион бүтээнэ үү',
         'Төлөвлөгөө гаргана уу', 'Загвар гаргана уу', 'Шинэ зүйл зохионо уу',
@@ -183,6 +364,18 @@ BLOOM_TRAIN = {
         'Санал гаргана уу', 'Шинэ аргаар бүтээнэ үү',
         'Шинэ санаа оруулна уу', 'Загвар зохиона уу', 'Найруулна уу',
         'Шинэ зүйл гаргана уу', 'Програм бичнэ үү',
+        # Classroom creative / generative prompts
+        'Өөрийн санааг бүтээнэ үү', 'Шинэ бүтээл гаргана уу',
+        'Зохион бүтээнэ үү харуулна уу', 'Бодлогыг шинэ аргаар шийдэнэ үү',
+        'Өөрийн загвар зохиона уу', 'Шинэ систем боловсруулна уу',
+        'Бүтээлч ажил хийнэ үү', 'Оригинал бүтээл гаргана уу',
+        'Шинэ арга зам санаачилна уу', 'Нийлүүлж шинэ зүйл бүтээнэ үү',
+        'Шинэ дизайн гаргана уу', 'Гарын авлага боловсруулна уу',
+        'Төслийн санал бичнэ үү', 'Ямар шинэ шийдэл байж болох вэ',
+        'Шинэ хувилбар зохиона уу', 'Бүтээгдэхүүн гаргана уу',
+        'Яаж шинэчилж болох вэ', 'Хэрэглэгчдэд зориулсан загвар гаргана уу',
+        'Шинэ аргачлал боловсруулна уу',
+        'Үр дүнтэй шийдэл бүтээж харуулна уу',
     ],
 }
 
@@ -275,6 +468,104 @@ def _preprocess(text):
     return text
 
 
+class BloomBertClassifier:
+    """BloomBERT-style classifier for Mongolian classroom questions.
+
+    Encodes text with XLM-RoBERTa (mean-pool of last hidden state), then
+    classifies with logistic regression trained on BLOOM_TRAIN examples.
+    Model is downloaded once (~280 MB) and cached by HuggingFace.
+
+    Confidence = softmax probability of the predicted class from LR.
+    Combined score = 0.6 × BERT_prob + 0.4 × keyword_boost so that
+    strong keyword matches still raise confidence.
+    """
+
+    def __init__(self, model_name=BLOOM_BERT_MODEL, extra_train=None):
+        import warnings, logging
+        logging.getLogger('transformers').setLevel(logging.ERROR)
+        warnings.filterwarnings('ignore', category=UserWarning, module='huggingface_hub')
+        self._classes = list(BLOOM_TRAIN.keys())
+        self._tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self._model = AutoModel.from_pretrained(model_name)
+        self._model.eval()
+
+        # Merge base training data with any auto-labeled extras
+        train_data = {k: list(v) for k, v in BLOOM_TRAIN.items()}
+        if extra_train:
+            for cls, txts in extra_train.items():
+                train_data.setdefault(cls, []).extend(txts)
+
+        texts, labels = [], []
+        for cls in self._classes:
+            for t in train_data.get(cls, []):
+                texts.append(t)
+                labels.append(cls)
+
+        emb = self._encode(texts)
+        self._lr = LogisticRegression(
+            C=1.0, class_weight='balanced', max_iter=1000,
+            random_state=42,
+        )
+        self._lr.fit(emb, labels)
+
+    def _encode(self, texts, batch_size=16):
+        """Return (N, hidden) mean-pooled XLM-R embeddings."""
+        all_emb = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i: i + batch_size]
+            enc = self._tokenizer(
+                batch, padding=True, truncation=True,
+                max_length=128, return_tensors='pt',
+            )
+            with torch.no_grad():
+                out = self._model(**enc)
+            mask = enc['attention_mask'].unsqueeze(-1).float()
+            pooled = (out.last_hidden_state * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
+            all_emb.append(pooled.cpu().numpy())
+        return np.vstack(all_emb)
+
+    def _kw_hit(self, text):
+        """Return fraction of keyword sets that fire (0–1) for the best class."""
+        t = _preprocess(text)
+        hits = {cls: sum(1 for kw in BLOOM_KEYWORDS[cls] if kw in t)
+                for cls in self._classes}
+        best = max(hits.values())
+        return hits, best
+
+    def _scores(self, text):
+        emb = self._encode([text])
+        proba = self._lr.predict_proba(emb)[0]
+        bert_probs = {c: float(p) for c, p in zip(self._lr.classes_, proba)}
+
+        kw_hits, best_count = self._kw_hit(text)
+        total_kw = sum(kw_hits.values())
+
+        if total_kw > 0:
+            kw_probs = {c: kw_hits[c] / total_kw for c in self._classes}
+            # Blend: BERT dominates but keyword signal lifts the winner
+            combined = {c: 0.65 * bert_probs[c] + 0.35 * kw_probs[c]
+                        for c in self._classes}
+            kw_boost = min(0.15 * best_count, 0.25)
+            best_cls = max(combined, key=combined.get)
+            confidence = min(combined[best_cls] + kw_boost, 0.97)
+        else:
+            combined = bert_probs
+            best_cls = max(combined, key=combined.get)
+            confidence = combined[best_cls]
+
+        s = sum(combined.values())
+        probs = {c: round(v / s, 4) for c, v in combined.items()}
+        return best_cls, round(confidence, 3), probs
+
+    def predict(self, text):
+        best, conf, _ = self._scores(text)
+        return best, conf
+
+    def predict_all(self, text):
+        _, _, probs = self._scores(text)
+        return probs
+
+
 class BloomClassifier:
     """Bloom's taxonomy classifier.
 
@@ -286,9 +577,14 @@ class BloomClassifier:
       TF-IDF only    → proportional cosine score   (typically 0.15–0.25)
     """
 
-    def __init__(self):
+    def __init__(self, extra_train=None):
         self._classes = list(BLOOM_TRAIN.keys())
-        all_texts = [_preprocess(e) for c in self._classes for e in BLOOM_TRAIN[c]]
+        train_data = {k: list(v) for k, v in BLOOM_TRAIN.items()}
+        if extra_train:
+            for cls, txts in extra_train.items():
+                train_data.setdefault(cls, []).extend(txts)
+
+        all_texts = [_preprocess(e) for c in self._classes for e in train_data.get(c, [])]
         self._vec = TfidfVectorizer(
             analyzer='char_wb', ngram_range=(2, 4),
             sublinear_tf=True, max_features=8000,
@@ -296,7 +592,7 @@ class BloomClassifier:
         self._vec.fit(all_texts)
         self._centroids = {}
         for cls in self._classes:
-            vecs = self._vec.transform([_preprocess(e) for e in BLOOM_TRAIN[cls]])
+            vecs = self._vec.transform([_preprocess(e) for e in train_data.get(cls, [])])
             self._centroids[cls] = np.asarray(vecs.mean(axis=0))
 
     def _kw_scores(self, text):
@@ -360,12 +656,25 @@ class SupportClassifier:
 
 
 # ── Singletons ────────────────────────────────────────────────────────
-_bloom_clf = None
+_bloom_bert_clf = None   # BloomBertClassifier (preferred)
+_bloom_clf = None        # BloomClassifier (TF-IDF fallback)
 _support_clf = None
+_bert_failed = False     # set True if BERT model load fails
 
 
 def _get_bloom():
-    global _bloom_clf
+    """Return best available Bloom classifier: BERT > TF-IDF > None."""
+    global _bloom_bert_clf, _bloom_clf, _bert_failed
+
+    if not _bert_failed and TRANSFORMERS_OK and SKLEARN_OK:
+        if _bloom_bert_clf is None:
+            try:
+                _bloom_bert_clf = BloomBertClassifier()
+            except Exception:
+                _bert_failed = True
+        if _bloom_bert_clf is not None:
+            return _bloom_bert_clf
+
     if _bloom_clf is None and SKLEARN_OK:
         _bloom_clf = BloomClassifier()
     return _bloom_clf
@@ -376,6 +685,11 @@ def _get_support():
     if _support_clf is None and SKLEARN_OK:
         _support_clf = SupportClassifier()
     return _support_clf
+
+
+def using_bert():
+    """Return True if the BERT classifier is active."""
+    return isinstance(_get_bloom(), BloomBertClassifier)
 
 
 def bloom_classify(text):
@@ -400,3 +714,72 @@ def support_classify(text):
     if clf is None:
         return 'Дэмжээгүй', 0.5
     return clf.predict(text)
+
+
+# ── Auto-label system ──────────────────────────────────────────────────────────
+
+def _load_autolabels():
+    """Load persisted auto-labeled examples from JSON cache."""
+    if _AUTOLABEL_FILE.exists():
+        with open(_AUTOLABEL_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {c: [] for c in BLOOM_TRAIN}
+
+
+def _save_autolabels(data):
+    with open(_AUTOLABEL_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def collect_autolabel(text, threshold=0.70):
+    """Classify text; if confidence ≥ threshold, persist as auto-label.
+
+    Returns (level, confidence) same as bloom_classify.
+    Call retrain_bloom() periodically to incorporate collected labels.
+    """
+    level, conf = bloom_classify(text)
+    if conf >= threshold:
+        data = _load_autolabels()
+        bucket = data.setdefault(level, [])
+        clean = text.strip()
+        # Avoid duplicates (exact match)
+        if clean and clean not in bucket and clean not in BLOOM_TRAIN.get(level, []):
+            bucket.append(clean)
+            _save_autolabels(data)
+    return level, conf
+
+
+def autolabel_stats():
+    """Return dict with auto-label counts per level and total."""
+    data = _load_autolabels()
+    counts = {c: len(data.get(c, [])) for c in BLOOM_TRAIN}
+    counts['_total'] = sum(counts.values())
+    return counts
+
+
+def retrain_bloom(min_new=5):
+    """Retrain the Bloom classifier with auto-labeled data.
+
+    Only retrains when at least `min_new` new examples have been collected.
+    Returns True if retrained, False if not enough data yet.
+    """
+    global _bloom_bert_clf, _bloom_clf, _bert_failed
+
+    extra = _load_autolabels()
+    total_new = sum(len(v) for v in extra.values())
+    if total_new < min_new:
+        return False
+
+    if not _bert_failed and TRANSFORMERS_OK and SKLEARN_OK:
+        try:
+            model_name = _bloom_bert_clf._tokenizer.name_or_path if _bloom_bert_clf else BLOOM_BERT_MODEL
+            _bloom_bert_clf = BloomBertClassifier(model_name=model_name, extra_train=extra)
+            return True
+        except Exception:
+            _bert_failed = True
+
+    if SKLEARN_OK:
+        _bloom_clf = BloomClassifier(extra_train=extra)
+        return True
+
+    return False

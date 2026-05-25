@@ -24,3 +24,6 @@ uploads/
 # Test Excel files
 test_sample.xlsx
 test_multi_sheet.xlsx
+
+# ML auto-label runtime cache
+autolabel_cache.json

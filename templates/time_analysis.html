@@ -182,8 +182,8 @@ tr:hover td{background:#fafcff;}
 <!-- ── PAGE 3: Bloom taxonomy (ML) ───────────────────────────── -->
 <div class="page" id="page3">
   <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:0.82em;color:#856404;">
-    <strong>ML ангилал:</strong> Багшийн асуултыг Блумын таксономийн 6 түвшинд (Q1–Q6) TF-IDF + косинусын ижил төстэй байдлын аргаар автоматаар ангилна.
-    Q1=Санах, Q2=Ойлгох, Q3=Хэрэглэх, Q4=Шинжлэх, Q5=Үнэлэх, Q6=Бүтээх
+    <strong>BloomBERT ангилал:</strong> Багшийн асуултыг <strong>XLM-RoBERTa</strong> олон хэлний трансформер загвар + логистик регресс аргаар Блумын таксономийн 6 түвшинд (Q1–Q6) автоматаар ангилна.
+    <span style="margin-left:8px">Q1=Санах · Q2=Ойлгох · Q3=Хэрэглэх · Q4=Шинжлэх · Q5=Үнэлэх · Q6=Бүтээх</span>
   </div>
   <div class="metrics" id="bloom-metrics"><div class="spinner"></div></div>
   <div class="chart-row">
@@ -197,10 +197,30 @@ tr:hover td{background:#fafcff;}
     </div>
   </div>
   <div class="card">
-    <h3>Дэлгэрэнгүй — багш тус бүрийн асуулт ба ML ангилал</h3>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <h3 style="margin:0">Дэлгэрэнгүй — багш тус бүрийн асуулт ба ML ангилал</h3>
+      <select id="bloomLevelFilter" onchange="filterBloomTable()" style="margin-left:auto;padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.82em;">
+        <option value="">Бүх түвшин</option>
+        <option value="Q1">Q1 – Санах</option>
+        <option value="Q2">Q2 – Ойлгох</option>
+        <option value="Q3">Q3 – Хэрэглэх</option>
+        <option value="Q4">Q4 – Шинжлэх</option>
+        <option value="Q5">Q5 – Үнэлэх</option>
+        <option value="Q6">Q6 – Бүтээх</option>
+      </select>
+      <select id="bloomSupFilter" onchange="filterBloomTable()" style="padding:4px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.82em;">
+        <option value="">Бүх дэмжлэг</option>
+        <option value="Дэмжсэн">Дэмжсэн</option>
+        <option value="Дэмжээгүй">Дэмжээгүй</option>
+      </select>
+      <span id="bloomRowCount" style="font-size:0.8em;color:#aaa"></span>
+    </div>
     <div class="tbl-wrap">
       <table id="bloomTable">
-        <thead><tr><th>Харилцан ярианы дугаар</th><th>Түвшин</th><th>Нэр</th><th>Итгэлцэл</th><th>Дэмжлэг</th><th>Асуулт</th></tr></thead>
+        <thead><tr>
+          <th>Яр. дугаар</th><th>Түвшин</th><th>Нэр</th>
+          <th>Итгэлцэл</th><th>Дэмжлэг</th><th>Асуулт</th>
+        </tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -288,14 +308,13 @@ async function loadAll(){
   const base = apiBase();
   const src  = getSource();
 
-  const [sumR, segsR, suppR, chainR] = await Promise.all([
+  const [sumR, segsR, chainR] = await Promise.all([
     fetch(`${base}/summary?sheet=${enc}`),
     fetch(`${base}/segments?sheet=${enc}`),
-    fetch(`${base}/support?sheet=${enc}`),
     fetch(`${base}/question-chain?sheet=${enc}`),
   ]);
-  const [sum, segs, support, chain] = await Promise.all(
-    [sumR, segsR, suppR, chainR].map(r => r.json())
+  const [sum, segs, chain] = await Promise.all(
+    [sumR, segsR, chainR].map(r => r.json())
   );
 
   let teacherT = [];
@@ -303,12 +322,20 @@ async function loadAll(){
     teacherT = await fetch(`/api/time/teacher-time?sheet=${enc}`).then(r => r.json());
   }
 
-  // Bloom ML — fetch asynchronously after rendering other tabs
+  // Render fast tabs immediately
   renderSegPage(sum, segs);
   renderTimePage(sum, teacherT, src);
-  renderSupportPage(support);
   renderChainPage(chain);
-  renderBloomPage(null);  // show spinner
+
+  // Support & Bloom load asynchronously — show spinner while waiting
+  renderSupportPage(null);
+  renderBloomPage(null);
+
+  fetch(`${base}/support?sheet=${enc}`)
+    .then(r => r.json())
+    .then(data => renderSupportPage(data))
+    .catch(e => renderSupportPage({error: 'Өгөгдөл ачааллахад алдаа гарлаа: ' + e}));
+
   fetch(`${base}/bloom-ml?sheet=${enc}`)
     .then(r => r.json())
     .then(data => renderBloomPage(data))
@@ -472,77 +499,120 @@ const CAT = {
 function catKey(r){ return (r.support==='Дэмжсэн'?'D':'N') + (r.extended?'D':'C'); }
 
 function renderSupportPage(data){
-  const n = data.length;
-  const sup  = data.filter(r=>r.support==='Дэмжсэн').length;
-  const ext  = data.filter(r=>r.extended).length;
-  const supExt = data.filter(r=>r.support==='Дэмжсэн' && r.extended).length;
-  const pctSup = n ? Math.round(sup/n*100) : 0;
-  const pctExt = n ? Math.round(ext/n*100) : 0;
+  const metricsEl = document.getElementById('sup-metrics');
+  const tbody = document.querySelector('#supTable tbody');
 
-  document.getElementById('sup-metrics').innerHTML = `
+  // Loading state
+  if(data === null){
+    metricsEl.innerHTML = '<div class="spinner"></div>';
+    tbody.innerHTML = '';
+    if(charts.sPie){ charts.sPie.destroy(); charts.sPie=null; }
+    if(charts.sBar){ charts.sBar.destroy(); charts.sBar=null; }
+    return;
+  }
+
+  // Error state
+  if(!Array.isArray(data)){
+    const msg = data.error || 'Өгөгдөл ачааллахад алдаа гарлаа';
+    metricsEl.innerHTML = `<div class="empty" style="width:100%;color:#e74c3c">${msg}</div>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty" style="color:#e74c3c">${msg}</td></tr>`;
+    return;
+  }
+
+  // Empty state
+  if(data.length === 0){
+    metricsEl.innerHTML = `
+      <div class="empty" style="width:100%;padding:20px">
+        T→S→T дараалал олдсонгүй.<br>
+        <span style="font-size:0.85em;color:#aaa">Багшийн асуулт (Q код) болон сурагчийн хариулт бүхий хичээлийг сонгоно уу.</span>
+      </div>`;
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Өгөгдөл байхгүй</td></tr>';
+    return;
+  }
+
+  const n    = data.length;
+  const sup  = data.filter(r => r.support === 'Дэмжсэн').length;
+  const ext  = data.filter(r => r.extended).length;
+  const supExt = data.filter(r => r.support === 'Дэмжсэн' && r.extended).length;
+  const pctSup = Math.round(sup / n * 100);
+  const pctExt = Math.round(ext / n * 100);
+
+  metricsEl.innerHTML = `
     <div class="metric"><div class="val">${n}</div><div class="lbl">Нийт T→S→T хос</div></div>
     <div class="metric"><div class="val" style="color:#27ae60">${sup}</div><div class="lbl">Дэмжсэн (${pctSup}%)</div></div>
+    <div class="metric"><div class="val" style="color:#e74c3c">${n-sup}</div><div class="lbl">Дэмжээгүй (${100-pctSup}%)</div></div>
     <div class="metric"><div class="val" style="color:#f39c12">${ext}</div><div class="lbl">Дэлгэрүүлсэн (${pctExt}%)</div></div>
     <div class="metric"><div class="val" style="color:#2980b9">${supExt}</div><div class="lbl">Дэмжиж дэлгэрүүлсэн</div></div>`;
 
   // Pie — 4-way classification
   const catCounts = {};
-  data.forEach(r=>{ const k=catKey(r); catCounts[k]=(catCounts[k]||0)+1; });
-  const catKeys   = Object.keys(CAT);
-  if(charts.sPie) charts.sPie.destroy();
-  charts.sPie = new Chart(document.getElementById('supPie'),{
-    type:'pie',
-    data:{
-      labels: catKeys.map(k=>CAT[k].label),
-      datasets:[{
-        data: catKeys.map(k=>catCounts[k]||0),
-        backgroundColor: catKeys.map(k=>CAT[k].color),
-      }]
+  data.forEach(r => { const k = catKey(r); catCounts[k] = (catCounts[k] || 0) + 1; });
+  const catKeys = Object.keys(CAT);
+  if(charts.sPie){ charts.sPie.destroy(); }
+  charts.sPie = new Chart(document.getElementById('supPie'), {
+    type: 'pie',
+    data: {
+      labels: catKeys.map(k => CAT[k].label),
+      datasets: [{ data: catKeys.map(k => catCounts[k] || 0), backgroundColor: catKeys.map(k => CAT[k].color) }]
     },
-    options:{plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+    options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
   });
 
   // Stacked bar — Q code × 4-way classification
   const qMap = {};
-  data.forEach(r=>{
+  data.forEach(r => {
     const ck = catKey(r);
-    r.q_codes.split(', ').filter(Boolean).forEach(q=>{
-      if(!qMap[q]) qMap[q]={DD:0,DC:0,ND:0,NC:0};
+    const codes = Array.isArray(r.q_codes)
+      ? r.q_codes
+      : String(r.q_codes || '').split(', ').filter(Boolean);
+    codes.forEach(q => {
+      if(!qMap[q]) qMap[q] = {DD:0, DC:0, ND:0, NC:0};
       qMap[q][ck]++;
     });
   });
   const qLabels = Object.keys(qMap);
-  if(charts.sBar) charts.sBar.destroy();
-  charts.sBar = new Chart(document.getElementById('supBar'),{
-    type:'bar',
-    data:{
-      labels: qLabels,
-      datasets: catKeys.map(k=>({
-        label: CAT[k].label,
-        data: qLabels.map(q=>qMap[q][k]||0),
-        backgroundColor: CAT[k].color,
-      }))
-    },
-    options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10}}}},
-             scales:{x:{stacked:true},y:{stacked:true,title:{display:true,text:'Тоо'}}}}
-  });
+  if(charts.sBar){ charts.sBar.destroy(); }
+  if(qLabels.length){
+    charts.sBar = new Chart(document.getElementById('supBar'), {
+      type: 'bar',
+      data: {
+        labels: qLabels,
+        datasets: catKeys.map(k => ({
+          label: CAT[k].label,
+          data: qLabels.map(q => qMap[q][k] || 0),
+          backgroundColor: CAT[k].color,
+        }))
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+        scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Тоо' } } }
+      }
+    });
+  } else {
+    document.getElementById('supBar').parentElement.innerHTML =
+      '<div class="empty">Q код олдсонгүй</div>';
+  }
 
-  // Table — support + confidence + extension
-  const tbody = document.querySelector('#supTable tbody');
-  tbody.innerHTML = data.map(r=>{
+  // Table
+  tbody.innerHTML = data.map(r => {
     const ck = catKey(r);
-    const supBadge = `<span class="badge badge-${r.support==='Дэмжсэн'?'D':'N'}">${r.support}</span>`;
+    const catColor = (CAT[ck] || CAT['NC']).color;
+    const isSupported = r.support === 'Дэмжсэн';
+    const supBadge = `<span class="badge badge-${isSupported?'D':'N'}">${r.support || '—'}</span>`;
     const confTxt = r.confidence != null
-      ? `<span style="font-size:0.78em;color:#555">${Math.round(r.confidence*100)}%</span>`
+      ? `<span style="font-size:0.78em;color:#555">${Math.round(r.confidence * 100)}%</span>`
       : '—';
     const extBadge = r.extended
       ? `<span class="badge" style="background:#f39c12">Дэлгэрсэн</span>`
       : `<span class="badge" style="background:#bdc3c7;color:#fff">Дуусгасан</span>`;
-    return `<tr style="border-left:3px solid ${CAT[ck].color}">
-      <td>${r.q_num}</td><td>${r.q_codes}</td>
-      <td style="font-size:0.8em;color:#2c3e50">${r.teacher_q}</td>
-      <td style="font-size:0.8em;color:#555">${r.student_ans}</td>
-      <td style="font-size:0.8em;color:#555">${r.teacher_followup}</td>
+    const qDisp = Array.isArray(r.q_codes) ? r.q_codes.join(', ') : (r.q_codes || '—');
+    return `<tr style="border-left:3px solid ${catColor}">
+      <td style="color:#999;font-size:0.8em">${r.q_num}</td>
+      <td><span style="font-size:0.8em;color:#555">${qDisp}</span></td>
+      <td style="font-size:0.8em;color:#2c3e50">${r.teacher_q || '—'}</td>
+      <td style="font-size:0.8em;color:#555">${r.student_ans || '—'}</td>
+      <td style="font-size:0.8em;color:#555">${r.teacher_followup || '—'}</td>
       <td>${supBadge}</td>
       <td>${confTxt}</td>
       <td>${extBadge}</td>
@@ -551,78 +621,127 @@ function renderSupportPage(data){
 }
 
 // ── PAGE 3: Bloom ML ────────────────────────────────────────────
-function renderBloomPage(mlData){
-  const metricsEl = document.getElementById('bloom-metrics');
-  const tbodyEl   = document.querySelector('#bloomTable tbody');
+let _bloomRows = [];  // stored for filter
 
-  // null = still loading
-  if(mlData === null){
-    metricsEl.innerHTML = '<div class="spinner"></div>';
-    tbodyEl.innerHTML   = '';
-    if(charts.bPie) charts.bPie.destroy();
-    if(charts.bBar) charts.bBar.destroy();
-    return;
-  }
+function filterBloomTable(){
+  const lv  = document.getElementById('bloomLevelFilter').value;
+  const sup = document.getElementById('bloomSupFilter').value;
+  const rows = _bloomRows.filter(r =>
+    (!lv  || r.level === lv) &&
+    (!sup || r.support === sup)
+  );
+  _fillBloomTable(rows);
+}
 
-  // Error from server
-  if(mlData.error){
-    metricsEl.innerHTML = `<div class="empty" style="width:100%;color:#e74c3c">${mlData.error}</div>`;
-    tbodyEl.innerHTML   = '';
-    return;
-  }
-
-  const dist = mlData.distribution || [];
-  const rows = mlData.rows || [];
-  const total = dist.reduce((a,d)=>a+d.count,0);
-
-  metricsEl.innerHTML = dist.length
-    ? dist.map(d=>`
-        <div class="metric">
-          <div class="val" style="color:${d.color}">${d.count}</div>
-          <div class="lbl" style="font-size:0.72em">${d.code}</div>
-        </div>`).join('')
-    : '<div class="empty">Багшийн асуулт олдсонгүй</div>';
-
-  if(!dist.length) return;
-
-  // Pie
-  if(charts.bPie) charts.bPie.destroy();
-  charts.bPie = new Chart(document.getElementById('bloomPie'),{
-    type:'pie',
-    data:{labels:dist.map(d=>d.code+': '+d.label.split('(')[1]?.replace(')','').trim()||d.label),
-          datasets:[{data:dist.map(d=>d.count), backgroundColor:dist.map(d=>d.color)}]},
-    options:{plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}
-  });
-
-  // Bar
-  if(charts.bBar) charts.bBar.destroy();
-  charts.bBar = new Chart(document.getElementById('bloomBar'),{
-    type:'bar',
-    data:{
-      labels:dist.map(d=>d.code),
-      datasets:[{label:'Тоо (ML)', data:dist.map(d=>d.count),
-                 backgroundColor:dist.map(d=>d.color)}]
-    },
-    options:{responsive:true,plugins:{legend:{display:false}},
-             scales:{y:{title:{display:true,text:'Асуултын тоо'},beginAtZero:true}}}
-  });
-
-  // Per-utterance table with confidence
-  tbodyEl.innerHTML = rows.map(r=>{
-    const supBadge = r.support==='Дэмжсэн'
+function _fillBloomTable(rows){
+  const countEl = document.getElementById('bloomRowCount');
+  if(countEl) countEl.textContent = `${rows.length} мөр`;
+  document.querySelector('#bloomTable tbody').innerHTML = rows.map(r => {
+    const supBadge = r.support === 'Дэмжсэн'
       ? `<span class="badge badge-D">Дэмжсэн</span>`
-      : r.support==='Дэмжээгүй'
+      : r.support === 'Дэмжээгүй'
         ? `<span class="badge badge-N">Дэмжээгүй</span>`
-        : '—';
+        : '<span style="color:#aaa">—</span>';
+    const confTxt = r.confidence != null
+      ? `<span style="font-size:0.82em;color:#555;font-weight:600">${Math.round(r.confidence * 100)}%</span>`
+      : '<span style="color:#aaa">—</span>';
     return `<tr>
-      <td style="color:#999;font-size:0.8em">${r.conv_num??''}</td>
+      <td style="color:#999;font-size:0.8em">${r.conv_num ?? ''}</td>
       <td><span class="badge" style="background:${r.color};font-size:0.85em">${r.level}</span></td>
       <td style="font-size:0.8em">${r.label}</td>
-      <td style="font-size:0.8em;color:#888">${Math.round(r.confidence*100)}%</td>
+      <td>${confTxt}</td>
       <td>${supBadge}</td>
       <td style="font-size:0.79em;color:#2c3e50">${r.text}</td>
     </tr>`;
-  }).join('');
+  }).join('') || '<tr><td colspan="6" class="empty">Тохирох мөр олдсонгүй</td></tr>';
+}
+
+function renderBloomPage(mlData){
+  const metricsEl = document.getElementById('bloom-metrics');
+
+  // Loading state
+  if(mlData === null){
+    metricsEl.innerHTML = '<div class="spinner"></div>';
+    _bloomRows = [];
+    _fillBloomTable([]);
+    if(charts.bPie){ charts.bPie.destroy(); charts.bPie = null; }
+    if(charts.bBar){ charts.bBar.destroy(); charts.bBar = null; }
+    return;
+  }
+
+  // Error state
+  if(mlData.error || (!mlData.distribution && !mlData.rows)){
+    const msg = mlData.error || 'Өгөгдөл ачааллахад алдаа гарлаа';
+    metricsEl.innerHTML = `<div class="empty" style="width:100%;color:#e74c3c">${msg}</div>`;
+    _fillBloomTable([]);
+    return;
+  }
+
+  const dist  = mlData.distribution || [];
+  const rows  = mlData.rows || [];
+  const total = dist.reduce((a, d) => a + d.count, 0);
+
+  // Metrics — count + percentage + short label
+  if(!dist.length){
+    metricsEl.innerHTML = '<div class="empty" style="width:100%">Багшийн асуулт олдсонгүй</div>';
+    return;
+  }
+  metricsEl.innerHTML =
+    `<div class="metric"><div class="val">${total}</div><div class="lbl">Нийт асуулт</div></div>` +
+    dist.map(d => {
+      const pct = total ? Math.round(d.count / total * 100) : 0;
+      const shortName = d.label.includes('(') ? d.label.split('(')[1].replace(')', '') : d.label;
+      return `<div class="metric">
+        <div class="val" style="color:${d.color}">${d.count}</div>
+        <div class="lbl" style="font-size:0.7em">${d.code} · ${shortName}<br>
+          <span style="color:#aaa">${pct}%</span>
+        </div>
+      </div>`;
+    }).join('');
+
+  // Pie — safe label extraction
+  const pieLabels = dist.map(d => {
+    const m = d.label.match(/\(([^)]+)\)/);
+    return m ? `${d.code}: ${m[1]}` : d.label;
+  });
+  if(charts.bPie) charts.bPie.destroy();
+  charts.bPie = new Chart(document.getElementById('bloomPie'), {
+    type: 'pie',
+    data: {
+      labels: pieLabels,
+      datasets: [{ data: dist.map(d => d.count), backgroundColor: dist.map(d => d.color) }]
+    },
+    options: {
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 10 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed/total*100)}%)` } }
+      }
+    }
+  });
+
+  // Bar — full Mongolian label on x-axis
+  if(charts.bBar) charts.bBar.destroy();
+  charts.bBar = new Chart(document.getElementById('bloomBar'), {
+    type: 'bar',
+    data: {
+      labels: dist.map(d => d.code),
+      datasets: [{ label: 'Асуултын тоо', data: dist.map(d => d.count), backgroundColor: dist.map(d => d.color) }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { title: (items) => dist[items[0].dataIndex]?.label || '', label: ctx => ` ${ctx.parsed.y} асуулт` } }
+      },
+      scales: { y: { title: { display: true, text: 'Асуултын тоо' }, beginAtZero: true } }
+    }
+  });
+
+  // Table with filter
+  _bloomRows = rows;
+  document.getElementById('bloomLevelFilter').value = '';
+  document.getElementById('bloomSupFilter').value   = '';
+  _fillBloomTable(rows);
 }
 
 // ── PAGE 4: Question network (D3 force graph) ──────────────────
