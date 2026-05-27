@@ -27,3 +27,6 @@ test_multi_sheet.xlsx
 
 # ML auto-label runtime cache
 autolabel_cache.json
+
+# Fine-tuned model weights (too large for GitHub, >1 GB)
+bloom_mongolian_model/
